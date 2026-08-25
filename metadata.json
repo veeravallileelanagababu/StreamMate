@@ -1,0 +1,6 @@
+{
+  "name": "StreamMate",
+  "description": "Universal high-speed MP4 & MP3 converter, media analyzer, and lossless stream extractor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
