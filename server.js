@@ -32,75 +32,104 @@ function sanitizeFilename(name) {
 function extractExactFormats(info) {
   const formats = info.formats || [];
   const options = [];
-  const videoResolutions = [4320, 2160, 1440, 1080, 720, 480, 360, 240, 144];
+  const processedResolutions = new Set();
 
-  // Calculate max audio track size
-  const audioTracks = formats.filter((f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'));
-  let maxASize = 0;
-  audioTracks.forEach((a) => {
-    const sz = a.filesize || a.filesize_approx || 0;
-    if (sz > maxASize) maxASize = sz;
-  });
-  if (maxASize === 0) maxASize = (info.duration || 215) * 20000;
+  function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return null;
+    if (bytes >= 1024 * 1024 * 1024) {
+      return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
 
-  // 1. Video Options (ONLY resolutions actually present in the video)
-  videoResolutions.forEach((res) => {
-    const matching = formats.filter((f) => {
-      if (!f.vcodec || f.vcodec === 'none') return false;
-      if (f.height === res) return true;
-      if (f.format_note && f.format_note.includes(`${res}p`)) return true;
-      if (f.resolution && f.resolution.includes(`${res}p`)) return true;
-      return false;
-    });
+  const durationSec = info.duration || 30;
 
-    if (matching.length > 0) {
-      let maxVSize = 0;
-      let chosenCodec = 'H.264';
-      matching.forEach((f) => {
-        const sz = f.filesize || f.filesize_approx || 0;
-        if (sz > maxVSize) maxVSize = sz;
-        if (f.vcodec) chosenCodec = f.vcodec.split('.')[0].toUpperCase();
-      });
+  // 1. VIDEO FORMATS EXTRACTION (Works for YouTube, Instagram, Twitter, TikTok, Facebook, etc.)
+  const videoFormats = formats.filter(f => f.vcodec && f.vcodec !== 'none');
 
-      const totalSize = maxVSize + maxASize;
-      let sizeLabel = 'Dynamic MB';
-      if (totalSize > 0) {
-        sizeLabel = totalSize > 1024 * 1024 * 1024
-          ? `${(totalSize / 1024 / 1024 / 1024).toFixed(2)} GB`
-          : `${(totalSize / 1024 / 1024).toFixed(1)} MB`;
+  if (videoFormats.length > 0) {
+    // Sort video formats by height descending
+    videoFormats.sort((a, b) => (b.height || 0) - (a.height || 0));
+
+    videoFormats.forEach((f) => {
+      const h = f.height || 0;
+      const w = f.width || 0;
+      const resKey = h > 0 ? `${h}p` : f.format_id || 'sd';
+
+      if (h > 0 && processedResolutions.has(resKey)) return;
+      if (h > 0) processedResolutions.add(resKey);
+
+      // Determine exact size
+      let rawSize = f.filesize || f.filesize_approx || 0;
+
+      // If it's a video-only format (e.g. YouTube DASH video track), add best audio track size
+      if (!f.acodec || f.acodec === 'none') {
+        const audioTracks = formats.filter(a => a.acodec && a.acodec !== 'none' && (!a.vcodec || a.vcodec === 'none'));
+        let bestAudioSize = 0;
+        audioTracks.forEach(a => {
+          const sz = a.filesize || a.filesize_approx || 0;
+          if (sz > bestAudioSize) bestAudioSize = sz;
+        });
+        if (bestAudioSize === 0) bestAudioSize = durationSec * 24000;
+        rawSize += bestAudioSize;
       }
 
-      let resTitle = `${res}p`;
+      if (rawSize === 0 && f.tbr) {
+        rawSize = (f.tbr * 1000 / 8) * durationSec;
+      }
+
+      const sizeLabel = formatBytes(rawSize) || `${((durationSec * 1500000) / 8 / 1024 / 1024).toFixed(1)} MB`;
+
+      let qualityTitle = `${h}p (${w > 0 ? (w < h ? 'Vertical' : 'HD') : 'Video'})`;
       let badge = undefined;
-      if (res === 4320) { resTitle = '8K (4320p Ultra HD)'; badge = '8K ULTRA'; }
-      else if (res === 2160) { resTitle = '4K (2160p Ultra HD)'; badge = '4K ULTRA'; }
-      else if (res === 1440) { resTitle = '1440p (2K QHD)'; badge = '2K QHD'; }
-      else if (res === 1080) { resTitle = '1080p (Full HD)'; badge = 'POPULAR'; }
-      else if (res === 720) { resTitle = '720p (HD)'; }
-      else if (res === 480) { resTitle = '480p (SD)'; }
-      else if (res === 360) { resTitle = '360p (Mobile)'; }
-      else if (res === 240) { resTitle = '240p (Compact)'; }
-      else if (res === 144) { resTitle = '144p (Low Data)'; }
+      if (h >= 4320) { qualityTitle = '8K (4320p Ultra HD)'; badge = '8K ULTRA'; }
+      else if (h >= 2160) { qualityTitle = '4K (2160p Ultra HD)'; badge = '4K ULTRA'; }
+      else if (h >= 1440) { qualityTitle = '1440p (2K QHD)'; badge = '2K QHD'; }
+      else if (h >= 1080) { qualityTitle = '1080p (Full HD)'; badge = 'FULL HD'; }
+      else if (h >= 720) { qualityTitle = '720p (HD)'; badge = 'HD'; }
+      else if (h >= 480) { qualityTitle = '480p (SD)'; }
+      else if (h >= 360) { qualityTitle = '360p (Mobile)'; }
+      else if (h > 0) { qualityTitle = `${h}p (Mobile)`; }
+
+      const vCodecName = f.vcodec ? f.vcodec.split('.')[0].toUpperCase() : 'MP4';
+      const fpsStr = f.fps ? `${f.fps}fps • ` : '';
 
       options.push({
-        id: `v-${res}-${Date.now()}`,
+        id: `v-${h || Date.now()}-${f.format_id || Math.random()}`,
         type: 'video',
-        format: 'MP4',
-        quality: resTitle,
+        format: (f.ext || 'mp4').toUpperCase(),
+        quality: qualityTitle,
         badge,
         fileSize: sizeLabel,
-        specs: `60fps • ${chosenCodec} Codec`,
-        iconLabel: res >= 2160 ? '4K' : res >= 720 ? 'HD' : 'SD',
+        specs: `${fpsStr}${vCodecName} Codec`,
+        iconLabel: h >= 2160 ? '4K' : h >= 720 ? 'HD' : 'SD',
       });
-    }
-  });
+    });
+  }
 
-  // 2. Audio Options (Standardized studio options computed from exact audio track duration)
-  const durationSec = info.duration || 215;
-  const mp3Size = `${((durationSec * 320000 / 8) / 1024 / 1024).toFixed(1)} MB`;
-  const m4aSize = `${((durationSec * 192000 / 8) / 1024 / 1024).toFixed(1)} MB`;
-  const wavSize = `${((durationSec * 1411200 / 8) / 1024 / 1024).toFixed(1)} MB`;
-  const flacSize = `${((durationSec * 700000 / 8) / 1024 / 1024).toFixed(1)} MB`;
+  // Fallback if no video formats array matched
+  if (options.length === 0) {
+    const mainHeight = info.height || 1080;
+    const rawSize = info.filesize || info.filesize_approx || 0;
+    const sizeLabel = formatBytes(rawSize) || `${((durationSec * 2000000) / 8 / 1024 / 1024).toFixed(1)} MB`;
+
+    options.push({
+      id: `v-main-${Date.now()}`,
+      type: 'video',
+      format: (info.ext || 'mp4').toUpperCase(),
+      quality: `${mainHeight}p High Quality`,
+      badge: 'POPULAR',
+      fileSize: sizeLabel,
+      specs: 'Standard Full Stream',
+      iconLabel: mainHeight >= 720 ? 'HD' : 'SD',
+    });
+  }
+
+  // 2. AUDIO FORMATS EXTRACTION
+  const mp3Size = formatBytes((durationSec * 320000) / 8) || `${((durationSec * 320000 / 8) / 1024 / 1024).toFixed(1)} MB`;
+  const m4aSize = formatBytes((durationSec * 192000) / 8) || `${((durationSec * 192000 / 8) / 1024 / 1024).toFixed(1)} MB`;
+  const wavSize = formatBytes((durationSec * 1411200) / 8) || `${((durationSec * 1411200 / 8) / 1024 / 1024).toFixed(1)} MB`;
+  const flacSize = formatBytes((durationSec * 700000) / 8) || `${((durationSec * 700000 / 8) / 1024 / 1024).toFixed(1)} MB`;
 
   options.push(
     {
@@ -192,7 +221,7 @@ app.post('/api/analyze', async (req, res) => {
     const views = info.view_count ? `${(info.view_count / 1000).toFixed(1)}K` : '1.5M';
     const formats = extractExactFormats(info);
 
-    console.log(`[StreamMate Analyze Success] URL: ${url} | Title: "${title}" | Available Formats: ${formats.length}`);
+    console.log(`[StreamMate Analyze Success] URL: ${url} | Title: "${title}" | Formats Extracted: ${formats.length}`);
 
     return res.json({
       success: true,
@@ -212,7 +241,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// 2. Download API Endpoint - Merges and streams full resolution video & audio
+// 2. Download API Endpoint - Immediate response headers for live browser download history & streaming
 app.get('/api/download', async (req, res) => {
   let mediaUrl = req.query.url;
   const isAudio = req.query.type === 'audio' || req.query.format === 'mp3';
@@ -228,30 +257,23 @@ app.get('/api/download', async (req, res) => {
     mediaUrl = `https://${mediaUrl}`;
   }
 
+  const cleanTitle = sanitizeFilename(requestedTitle || 'StreamMate_Media');
+  const fileExt = isAudio ? 'mp3' : 'mp4';
+  const clientFileName = `${cleanTitle}.${fileExt}`;
+  const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
+
   console.log(`[StreamMate Download Request] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality}`);
+
+  // Send attachment headers IMMEDIATELY so Chrome/Edge/Firefox opens the native download bar
+  // and displays the downloading process in chrome://downloads history right away!
+  res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
+  res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
 
   const tempDir = os.tmpdir();
   const fileId = `streammate_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
   const rawOutputFile = path.join(tempDir, `${fileId}.%(ext)s`);
 
   try {
-    let videoTitle = requestedTitle;
-    if (!videoTitle) {
-      try {
-        const rawInfo = await exec(mediaUrl, {
-          dumpSingleJson: true,
-          noWarnings: true,
-          noCheckCertificates: true,
-        });
-        const info = typeof rawInfo === 'string' ? JSON.parse(rawInfo) : rawInfo;
-        videoTitle = info.title;
-      } catch {
-        // fallback
-      }
-    }
-
-    const cleanTitle = sanitizeFilename(videoTitle || 'StreamMate_Media');
-    
     // Select quality format filter
     let formatArg = 'bestvideo+bestaudio/best';
     if (isAudio) {
@@ -274,7 +296,7 @@ app.get('/api/download', async (req, res) => {
       noCheckCertificates: true,
     };
 
-    console.log(`[StreamMate Engine] Executing yt-dlp with ffmpeg merging for target: "${cleanTitle}"...`);
+    console.log(`[StreamMate Engine] Executing yt-dlp binary stream for target: "${cleanTitle}"...`);
     await exec(mediaUrl, args);
 
     // Locate generated file in temp dir
@@ -286,17 +308,6 @@ app.get('/api/download', async (req, res) => {
     }
 
     const fullPath = path.join(tempDir, downloadedFile);
-    const stats = fs.statSync(fullPath);
-    const fileExt = path.extname(downloadedFile).replace('.', '') || (isAudio ? 'mp3' : 'mp4');
-    const clientFileName = `${cleanTitle}.${fileExt}`;
-
-    console.log(`[StreamMate Download Success] Sending file: "${clientFileName}" | Real Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-
-    const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
-    res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
-    res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : fileExt === 'webm' ? 'video/webm' : 'video/mp4');
-    res.setHeader('Content-Length', stats.size);
-
     const readStream = fs.createReadStream(fullPath);
     readStream.pipe(res);
 
@@ -334,4 +345,3 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 StreamMate Real Media Download Server running on port ${PORT}`);
 });
-
