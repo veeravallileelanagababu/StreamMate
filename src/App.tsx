@@ -9,7 +9,6 @@ import { MediaResultView } from './components/MediaResultView';
 import { DownloadModal } from './components/DownloadModal';
 import { AdvancedSettingsModal } from './components/AdvancedSettingsModal';
 import { MediaPreviewModal } from './components/MediaPreviewModal';
-import { HistoryDrawer } from './components/HistoryDrawer';
 import { Footer } from './components/Footer';
 
 import { generatePlayableAudioBlob, generatePlayableVideoBlob } from './utils/mediaGenerator';
@@ -24,8 +23,6 @@ export default function App() {
   const [activeTask, setActiveTask] = useState<DownloadTask | null>(null);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<DownloadTask[]>([]);
 
   // Advanced settings state
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>({
@@ -131,8 +128,6 @@ export default function App() {
     };
 
     setActiveTask(newTask);
-    // Add immediately to history so user sees downloading progress in history drawer
-    setHistory((prev) => [newTask, ...prev.filter((t) => t.id !== newTask.id)]);
 
     // Multi-stage download progress
     let currentProgress = 15;
@@ -152,7 +147,6 @@ export default function App() {
         };
 
         setActiveTask(completedTask);
-        setHistory((prev) => prev.map((t) => (t.id === newTask.id ? completedTask : t)));
       } else {
         const updatedTask: DownloadTask = {
           ...newTask,
@@ -163,7 +157,6 @@ export default function App() {
         };
 
         setActiveTask((prev) => (prev ? updatedTask : null));
-        setHistory((prev) => prev.map((t) => (t.id === newTask.id ? updatedTask : t)));
       }
     }, 150);
   };
@@ -230,8 +223,6 @@ export default function App() {
     <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] flex flex-col font-['Inter',sans-serif] selection:bg-[#6366f1]/30 selection:text-white">
       {/* Top Header */}
       <Header
-        onOpenHistory={() => setIsHistoryOpen(true)}
-        historyCount={history.length}
         onResetToHome={handleResetToHome}
       />
 
@@ -290,13 +281,7 @@ export default function App() {
         media={currentMedia}
       />
 
-      <HistoryDrawer
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        history={history}
-        onClearHistory={() => setHistory([])}
-        onSaveToDisk={handleSaveToDisk}
-      />
+
     </div>
   );
 }

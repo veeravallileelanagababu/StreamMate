@@ -1,15 +1,11 @@
 import React from 'react';
-import { History, Sparkles, Video, Music } from 'lucide-react';
+import { Sparkles, Video, Music } from 'lucide-react';
 
 interface HeaderProps {
-  onOpenHistory?: () => void;
-  historyCount?: number;
   onResetToHome?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  onOpenHistory,
-  historyCount = 0,
   onResetToHome,
 }) => {
   return (
@@ -37,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Feature Highlights in Header */}
-        <div className="hidden md:flex items-center gap-6 text-xs text-[#94a3b8]">
+        <div className="flex items-center gap-6 text-xs text-[#94a3b8]">
           <div className="flex items-center gap-1.5 text-[#c7c4d7]">
             <Video className="w-3.5 h-3.5 text-[#818cf8]" />
             <span>8K / 4K / 1080p Video</span>
@@ -46,26 +42,6 @@ export const Header: React.FC<HeaderProps> = ({
             <Music className="w-3.5 h-3.5 text-[#10b981]" />
             <span>320kbps MP3 & Lossless Audio</span>
           </div>
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-3">
-          {onOpenHistory && (
-            <button
-              id="header-history-btn"
-              onClick={onOpenHistory}
-              title="Recent Downloads & Activity"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#334155] text-xs font-medium text-[#c7c4d7] hover:text-white transition-all cursor-pointer"
-            >
-              <History className="w-3.5 h-3.5 text-[#6366f1]" />
-              <span>History</span>
-              {historyCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-[#6366f1] text-white text-[10px] font-bold">
-                  {historyCount}
-                </span>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </header>
