@@ -20,6 +20,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint for Render monitoring
+app.get(['/', '/api/health'], (req, res) => {
+  res.json({ status: 'ok', service: 'StreamMate Backend Engine', timestamp: new Date().toISOString() });
+});
+
 function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9_\-\. ]/g, '_').substring(0, 70);
 }
