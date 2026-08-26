@@ -20,7 +20,6 @@ import { API_BASE_URL } from '../config';
 interface MediaResultViewProps {
   media: MediaItem;
   onDownloadOption: (option: MediaFormatOption) => void;
-  onOpenAdvanced: () => void;
   onReset: () => void;
   onPreviewMedia: () => void;
 }
@@ -28,7 +27,6 @@ interface MediaResultViewProps {
 export const MediaResultView: React.FC<MediaResultViewProps> = ({
   media,
   onDownloadOption,
-  onOpenAdvanced,
   onReset,
   onPreviewMedia,
 }) => {
@@ -158,7 +156,7 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
 
         {/* Right Column: Download Options */}
         <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Header with Title and Advanced Settings button */}
+          {/* Header with Title */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#222a3d]">
             <div>
               <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight font-['Inter',sans-serif]">
@@ -168,15 +166,6 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                 {media.formats.length} total options (Video & Audio) available
               </p>
             </div>
-
-            <button
-              id="advanced-settings-btn"
-              onClick={onOpenAdvanced}
-              className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449] hover:border-[#464554] text-xs font-medium text-[#c7c4d7] hover:text-white transition-all cursor-pointer"
-            >
-              <Settings className="w-3.5 h-3.5 text-[#818cf8]" />
-              <span>Advanced Settings</span>
-            </button>
           </div>
 
           {/* Filter Tabs (All, Video, Audio) */}

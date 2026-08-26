@@ -7,7 +7,6 @@ import { SupportedPlatforms } from './components/SupportedPlatforms';
 import { QualitySettings } from './components/QualitySettings';
 import { MediaResultView } from './components/MediaResultView';
 import { DownloadModal } from './components/DownloadModal';
-import { AdvancedSettingsModal } from './components/AdvancedSettingsModal';
 import { MediaPreviewModal } from './components/MediaPreviewModal';
 import { Footer } from './components/Footer';
 
@@ -21,22 +20,7 @@ export default function App() {
 
   // Modals & Drawers
   const [activeTask, setActiveTask] = useState<DownloadTask | null>(null);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-  // Advanced settings state
-  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>({
-    videoCodec: 'h264',
-    audioCodec: 'mp3',
-    audioBitrate: '320k',
-    videoFramerate: '60',
-    normalizeAudio: true,
-    includeSubtitles: true,
-    embedCoverArt: true,
-    trimMedia: false,
-    trimStart: '00:00',
-    trimEnd: '12:45',
-  });
 
   // Analyze URL or Preset
   const handleAnalyze = async (inputUrl: string) => {
@@ -233,7 +217,6 @@ export default function App() {
           <MediaResultView
             media={currentMedia}
             onDownloadOption={handleDownloadOption}
-            onOpenAdvanced={() => setIsAdvancedOpen(true)}
             onReset={handleResetToHome}
             onPreviewMedia={() => setIsPreviewOpen(true)}
           />
@@ -268,12 +251,7 @@ export default function App() {
         onSaveToDisk={handleSaveToDisk}
       />
 
-      <AdvancedSettingsModal
-        isOpen={isAdvancedOpen}
-        onClose={() => setIsAdvancedOpen(false)}
-        settings={advancedSettings}
-        onSaveSettings={setAdvancedSettings}
-      />
+
 
       <MediaPreviewModal
         isOpen={isPreviewOpen}
