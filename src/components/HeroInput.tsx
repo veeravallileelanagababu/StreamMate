@@ -49,6 +49,7 @@ export const HeroInput: React.FC<HeroInputProps> = ({
   };
 
   const handleInputPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
     const pastedData = e.clipboardData.getData('text');
     if (pastedData) {
       setUrlInput(pastedData.trim());

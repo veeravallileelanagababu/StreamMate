@@ -219,6 +219,12 @@ app.post('/api/analyze', async (req, res) => {
   }
 
   url = url.trim();
+  if (url.includes('http://') || url.includes('https://')) {
+    const httpIdx = url.lastIndexOf('http');
+    if (httpIdx > 0) {
+      url = url.substring(httpIdx);
+    }
+  }
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = `https://${url}`;
   }
@@ -286,6 +292,12 @@ app.get('/api/download', async (req, res) => {
   }
 
   mediaUrl = String(mediaUrl).trim();
+  if (mediaUrl.includes('http://') || mediaUrl.includes('https://')) {
+    const httpIdx = mediaUrl.lastIndexOf('http');
+    if (httpIdx > 0) {
+      mediaUrl = mediaUrl.substring(httpIdx);
+    }
+  }
   if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
     mediaUrl = `https://${mediaUrl}`;
   }
