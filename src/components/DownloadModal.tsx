@@ -191,19 +191,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 <span>Copy Direct Download Link (for IDM / Browser)</span>
               </button>
 
-              {/* Direct Browser Download Navigation Link */}
-              <a
-                href={directDownloadUrl}
-                download
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#171f33] hover:bg-[#222a3d] border border-[#334155] text-xs font-semibold text-[#c7c4d7] hover:text-white transition-all text-center"
-              >
-                <Download className="w-3.5 h-3.5 text-[#10b981]" />
-                <span>Direct Browser Download ({task.formatOption.quality})</span>
-              </a>
-
               {downloadSuccess && (
-                <div className="p-2 rounded-lg bg-[#10b981]/15 border border-[#10b981]/30 text-center text-xs text-[#4edea3] font-medium animate-in fade-in">
-                  ✓ File download initiated! Check your browser downloads folder.
+                <div className="p-2.5 rounded-lg bg-[#10b981]/15 border border-[#10b981]/30 text-center text-xs text-[#4edea3] font-medium animate-in fade-in flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#10b981]" />
+                  <span>Download initiated! Check your browser's download manager.</span>
                 </div>
               )}
             </>

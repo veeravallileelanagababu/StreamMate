@@ -130,6 +130,8 @@ export default function App() {
     };
 
     setActiveTask(newTask);
+    // Add immediately to history so user sees downloading progress in history drawer
+    setHistory((prev) => [newTask, ...prev.filter((t) => t.id !== newTask.id)]);
 
     // Multi-stage download progress
     let currentProgress = 15;
@@ -149,29 +151,29 @@ export default function App() {
         };
 
         setActiveTask(completedTask);
-        setHistory((prev) => [completedTask, ...prev.filter((t) => t.id !== completedTask.id)]);
+        setHistory((prev) => prev.map((t) => (t.id === newTask.id ? completedTask : t)));
       } else {
-        setActiveTask((prev) =>
-          prev
-            ? {
-                ...prev,
-                progress: currentProgress,
-                status: currentProgress > 50 ? 'packaging' : 'fetching_stream',
-                downloadSpeed: '52.1 MB/s',
-                eta: '1s',
-              }
-            : null
-        );
+        const updatedTask: DownloadTask = {
+          ...newTask,
+          progress: currentProgress,
+          status: currentProgress > 50 ? 'packaging' : 'fetching_stream',
+          downloadSpeed: '52.1 MB/s',
+          eta: '1s',
+        };
+
+        setActiveTask((prev) => (prev ? updatedTask : null));
+        setHistory((prev) => prev.map((t) => (t.id === newTask.id ? updatedTask : t)));
       }
     }, 150);
   };
 
-  // Trigger actual browser download of real original video/audio file
+  // Trigger actual browser download of real original video/audio file natively in default browser
   const handleSaveToDisk = async (task: DownloadTask) => {
     const isAudio = task.formatOption.type === 'audio' || task.formatOption.isAudioExtraction;
     const typeStr = isAudio ? 'audio' : 'video';
     const formatStr = task.formatOption.format.toLowerCase();
     const qualityStr = encodeURIComponent(task.formatOption.quality);
+    const titleStr = encodeURIComponent(task.mediaItem.title || '');
 
     // Normalize pasted URL for download API
     let mediaUrl = task.mediaItem.url ? task.mediaItem.url.trim() : '';
@@ -182,59 +184,40 @@ export default function App() {
       mediaUrl = 'https://www.youtube.com/watch?v=cyberpunk4k';
     }
 
-    const cleanTitle = (task.mediaItem.title || 'StreamMate_Media')
-      .replace(/[\\/:*?"<>|]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const directDownloadUrl = `/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
 
-    let blob: Blob | null = null;
-    let fileName = `${cleanTitle}.${isAudio ? 'mp3' : 'mp4'}`;
-
+    // Trigger direct native browser download so default browser (Chrome, Edge, Firefox)
+    // manages file downloading, displays progress bar in browser history & download manager
     try {
-      // 1. Try downloading real original video/audio from backend api with exact title
-      const titleStr = encodeURIComponent(task.mediaItem.title || '');
-      const downloadApiUrl = `/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
-      const response = await fetch(downloadApiUrl);
-
-      if (response.ok) {
-        blob = await response.blob();
-        const disposition = response.headers.get('content-disposition');
-        if (disposition && disposition.includes('filename*=')) {
-          const matchStar = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-          if (matchStar && matchStar[1]) {
-            fileName = decodeURIComponent(matchStar[1]);
-          }
-        } else if (disposition && disposition.includes('filename=')) {
-          const match = disposition.match(/filename="?([^";]+)"?/);
-          if (match && match[1]) {
-            fileName = decodeURIComponent(match[1]);
-          }
-        }
-      }
+      const link = document.createElement('a');
+      link.href = directDownloadUrl;
+      link.download = '';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch {
-      // Fallback if server error
-    }
-
-    // Fallback blob generation if API unavailable
-    if (!blob) {
+      // Fallback if browser direct anchor fails
+      const cleanTitle = (task.mediaItem.title || 'StreamMate_Media')
+        .replace(/[\\/:*?"<>|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      let blob: Blob | null = null;
       if (isAudio) {
         blob = await generatePlayableAudioBlob(task.mediaItem.title);
-        fileName = `${cleanTitle}_${task.formatOption.quality.replace(/[^a-zA-Z0-9_-]/g, '_')}.wav`;
       } else {
         blob = await generatePlayableVideoBlob(task.mediaItem.title);
-        const ext = blob.type.includes('webm') ? 'webm' : 'mp4';
-        fileName = `${cleanTitle}_${task.formatOption.quality.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
       }
+      const ext = isAudio ? 'wav' : blob.type.includes('webm') ? 'webm' : 'mp4';
+      const fileName = `${cleanTitle}.${ext}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const handleResetToHome = () => {

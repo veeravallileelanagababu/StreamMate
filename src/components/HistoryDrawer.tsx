@@ -1,6 +1,6 @@
 import React from 'react';
 import { DownloadTask } from '../types';
-import { X, History, Trash2, Download, CheckCircle, Music, Video, Clock } from 'lucide-react';
+import { X, History, Trash2, Download, CheckCircle2, Loader2, Music, Video, Clock } from 'lucide-react';
 
 interface HistoryDrawerProps {
   isOpen: boolean;
@@ -68,11 +68,12 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
           ) : (
             history.map((task) => {
               const isAudio = task.formatOption.type === 'audio' || task.formatOption.isAudioExtraction;
+              const isCompleted = task.status === 'completed';
 
               return (
                 <div
                   key={task.id}
-                  className="p-3 rounded-xl bg-[#0b1326] border border-[#222a3d] hover:border-[#334155] transition-all flex flex-col gap-2.5"
+                  className="p-3.5 rounded-xl bg-[#0b1326] border border-[#222a3d] hover:border-[#334155] transition-all flex flex-col gap-2.5"
                 >
                   <div className="flex items-center gap-3">
                     <img
@@ -95,19 +96,45 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                     </div>
                   </div>
 
+                  {/* Downloading Progress Bar if actively downloading */}
+                  {!isCompleted && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[11px] text-[#818cf8] font-['JetBrains_Mono',monospace]">
+                        <span className="flex items-center gap-1.5 text-xs text-[#c0c1ff]">
+                          <Loader2 className="w-3 h-3 animate-spin text-[#818cf8]" />
+                          <span>Downloading stream...</span>
+                        </span>
+                        <span className="font-bold">{Math.round(task.progress)}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#171f33] rounded-full overflow-hidden border border-[#222a3d]">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#6366f1] via-[#818cf8] to-[#10b981] transition-all duration-200"
+                          style={{ width: `${task.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between pt-2 border-t border-[#171f33] text-[11px]">
                     <span className="text-[#908fa0] flex items-center gap-1 font-['JetBrains_Mono',monospace]">
                       <Clock className="w-3 h-3" />
                       {new Date(task.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
 
-                    <button
-                      onClick={() => onSaveToDisk(task)}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449] hover:border-[#6366f1] text-[#dae2fd] text-xs font-medium transition-all cursor-pointer"
-                    >
-                      <Download className="w-3 h-3 text-[#818cf8]" />
-                      <span>Save</span>
-                    </button>
+                    {isCompleted ? (
+                      <button
+                        onClick={() => onSaveToDisk(task)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#10b981]/20 hover:bg-[#10b981]/30 border border-[#10b981]/40 text-[#4edea3] hover:text-white text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#10b981]" />
+                        <span>Save to Device</span>
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#6366f1]/15 text-[#c0c1ff] text-[11px] font-medium border border-[#6366f1]/30">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Downloading</span>
+                      </span>
+                    )}
                   </div>
                 </div>
               );
