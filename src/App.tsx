@@ -13,6 +13,7 @@ import { HistoryDrawer } from './components/HistoryDrawer';
 import { Footer } from './components/Footer';
 
 import { generatePlayableAudioBlob, generatePlayableVideoBlob } from './utils/mediaGenerator';
+import { API_BASE_URL } from './config';
 
 export default function App() {
   const [urlInput, setUrlInput] = useState('');
@@ -54,7 +55,7 @@ export default function App() {
     // 1. Try fetching backend live metadata via yt-dlp
     try {
       if (targetUrl.startsWith('http')) {
-        const backendRes = await fetch('/api/analyze', {
+        const backendRes = await fetch(`${API_BASE_URL}/api/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: targetUrl }),
@@ -184,7 +185,7 @@ export default function App() {
       mediaUrl = 'https://www.youtube.com/watch?v=cyberpunk4k';
     }
 
-    const directDownloadUrl = `/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+    const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
 
     // Trigger direct native browser download so default browser (Chrome, Edge, Firefox)
     // manages file downloading, displays progress bar in browser history & download manager

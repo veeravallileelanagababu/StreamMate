@@ -15,6 +15,7 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface MediaResultViewProps {
   media: MediaItem;
@@ -265,7 +266,8 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                           const formatStr = option.format.toLowerCase();
                           const qualityStr = encodeURIComponent(option.quality);
                           const titleStr = encodeURIComponent(media.title);
-                          const directUrl = `${window.location.origin}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+                          const baseUrl = API_BASE_URL || window.location.origin;
+                          const directUrl = `${baseUrl}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
                           if (navigator.clipboard) {
                             navigator.clipboard.writeText(directUrl);
                           }
@@ -330,7 +332,8 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                         const formatStr = option.format.toLowerCase();
                         const qualityStr = encodeURIComponent(option.quality);
                         const titleStr = encodeURIComponent(media.title);
-                        const directUrl = `${window.location.origin}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+                        const baseUrl = API_BASE_URL || window.location.origin;
+                        const directUrl = `${baseUrl}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(directUrl);
                         }

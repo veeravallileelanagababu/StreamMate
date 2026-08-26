@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import ytdlp from 'yt-dlp-exec';
 import ffmpegPath from 'ffmpeg-static';
@@ -9,9 +10,10 @@ const exec = ytdlp.exec || ytdlp;
 const app = express();
 app.use(express.json());
 
-// CORS headers for local development
+// CORS headers for local & production deployment
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = process.env.FRONTEND_URL || '*';
+  res.header('Access-Control-Allow-Origin', allowedOrigin);
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -323,8 +325,8 @@ app.get('/api/stream', async (req, res) => {
   return app._router.handle(req, res);
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 StreamMate Real Media Download Server running on http://localhost:${PORT}`);
+  console.log(`🚀 StreamMate Real Media Download Server running on port ${PORT}`);
 });
 

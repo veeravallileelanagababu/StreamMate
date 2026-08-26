@@ -12,6 +12,8 @@ import {
   Music
 } from 'lucide-react';
 
+import { API_BASE_URL } from '../config';
+
 interface DownloadModalProps {
   task: DownloadTask | null;
   onClose: () => void;
@@ -34,7 +36,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   const formatStr = task.formatOption.format.toLowerCase();
   const qualityStr = encodeURIComponent(task.formatOption.quality);
   const titleStr = encodeURIComponent(task.mediaItem.title || '');
-  const directDownloadUrl = `/api/download?url=${encodeURIComponent(task.mediaItem.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+  const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(task.mediaItem.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
 
   const handleSaveClick = async () => {
     setIsSaving(true);
