@@ -86,7 +86,12 @@ export const HeroInput: React.FC<HeroInputProps> = ({
           <input
             ref={inputRef}
             id="media-url-input"
+            name="streammate-search-no-autofill"
             type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onPaste={handleInputPaste}
