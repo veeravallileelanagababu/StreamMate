@@ -234,6 +234,8 @@ app.post('/api/analyze', async (req, res) => {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
+      extractorArgs: 'youtube:player_client=android,web',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     });
 
     const title = info.title || 'Extracted Media Stream';
@@ -331,6 +333,8 @@ app.get('/api/download', async (req, res) => {
       ffmpegLocation: ffmpegPath,
       noWarnings: true,
       noCheckCertificates: true,
+      extractorArgs: 'youtube:player_client=android,web',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     };
 
     if (isAudio) {
