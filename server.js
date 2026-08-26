@@ -32,7 +32,6 @@ function sanitizeFilename(name) {
 function extractExactFormats(info) {
   const formats = info.formats || [];
   const options = [];
-  const processedResolutions = new Set();
 
   function formatBytes(bytes) {
     if (!bytes || bytes <= 0) return null;
@@ -44,74 +43,96 @@ function extractExactFormats(info) {
 
   const durationSec = info.duration || 30;
 
-  // 1. VIDEO FORMATS EXTRACTION (Works for YouTube, Instagram, Twitter, TikTok, Facebook, etc.)
+  // Best audio track size calculation for DASH video streams
+  const audioTracks = formats.filter(a => a.acodec && a.acodec !== 'none' && (!a.vcodec || a.vcodec === 'none'));
+  let maxAudioSize = 0;
+  audioTracks.forEach(a => {
+    const sz = a.filesize || a.filesize_approx || (a.abr ? (a.abr * 1000 * durationSec / 8) : 0);
+    if (sz > maxAudioSize) maxAudioSize = sz;
+  });
+  if (maxAudioSize === 0) maxAudioSize = (durationSec * 192000) / 8; // ~192kbps audio fallback
+
+  // Group video formats by resolution height
   const videoFormats = formats.filter(f => f.vcodec && f.vcodec !== 'none');
+  const heightGroups = new Map();
 
-  if (videoFormats.length > 0) {
-    // Sort video formats by height descending
-    videoFormats.sort((a, b) => (b.height || 0) - (a.height || 0));
-
-    videoFormats.forEach((f) => {
-      const h = f.height || 0;
-      const w = f.width || 0;
-      const resKey = h > 0 ? `${h}p` : f.format_id || 'sd';
-
-      if (h > 0 && processedResolutions.has(resKey)) return;
-      if (h > 0) processedResolutions.add(resKey);
-
-      // Determine exact size
-      let rawSize = f.filesize || f.filesize_approx || 0;
-
-      // If it's a video-only format (e.g. YouTube DASH video track), add best audio track size
-      if (!f.acodec || f.acodec === 'none') {
-        const audioTracks = formats.filter(a => a.acodec && a.acodec !== 'none' && (!a.vcodec || a.vcodec === 'none'));
-        let bestAudioSize = 0;
-        audioTracks.forEach(a => {
-          const sz = a.filesize || a.filesize_approx || 0;
-          if (sz > bestAudioSize) bestAudioSize = sz;
-        });
-        if (bestAudioSize === 0) bestAudioSize = durationSec * 24000;
-        rawSize += bestAudioSize;
+  videoFormats.forEach(f => {
+    const h = f.height || 0;
+    if (h > 0) {
+      if (!heightGroups.has(h)) {
+        heightGroups.set(h, []);
       }
+      heightGroups.get(h).push(f);
+    }
+  });
 
-      if (rawSize === 0 && f.tbr) {
-        rawSize = (f.tbr * 1000 / 8) * durationSec;
+  // Get distinct heights sorted descending
+  const sortedHeights = Array.from(heightGroups.keys()).sort((a, b) => b - a);
+
+  sortedHeights.forEach((h) => {
+    const group = heightGroups.get(h);
+    let maxVSize = 0;
+    let chosenCodec = 'MP4';
+    let chosenFps = 0;
+
+    group.forEach(f => {
+      let sz = f.filesize || f.filesize_approx || 0;
+      if (sz === 0 && f.vbr) {
+        sz = (f.vbr * 1000 * durationSec) / 8;
       }
-
-      const sizeLabel = formatBytes(rawSize) || `${((durationSec * 1500000) / 8 / 1024 / 1024).toFixed(1)} MB`;
-
-      let qualityTitle = `${h}p (${w > 0 ? (w < h ? 'Vertical' : 'HD') : 'Video'})`;
-      let badge = undefined;
-      if (h >= 4320) { qualityTitle = '8K (4320p Ultra HD)'; badge = '8K ULTRA'; }
-      else if (h >= 2160) { qualityTitle = '4K (2160p Ultra HD)'; badge = '4K ULTRA'; }
-      else if (h >= 1440) { qualityTitle = '1440p (2K QHD)'; badge = '2K QHD'; }
-      else if (h >= 1080) { qualityTitle = '1080p (Full HD)'; badge = 'FULL HD'; }
-      else if (h >= 720) { qualityTitle = '720p (HD)'; badge = 'HD'; }
-      else if (h >= 480) { qualityTitle = '480p (SD)'; }
-      else if (h >= 360) { qualityTitle = '360p (Mobile)'; }
-      else if (h > 0) { qualityTitle = `${h}p (Mobile)`; }
-
-      const vCodecName = f.vcodec ? f.vcodec.split('.')[0].toUpperCase() : 'MP4';
-      const fpsStr = f.fps ? `${f.fps}fps • ` : '';
-
-      options.push({
-        id: `v-${h || Date.now()}-${f.format_id || Math.random()}`,
-        type: 'video',
-        format: (f.ext || 'mp4').toUpperCase(),
-        quality: qualityTitle,
-        badge,
-        fileSize: sizeLabel,
-        specs: `${fpsStr}${vCodecName} Codec`,
-        iconLabel: h >= 2160 ? '4K' : h >= 720 ? 'HD' : 'SD',
-      });
+      if (sz === 0 && f.tbr) {
+        sz = (f.tbr * 1000 * durationSec) / 8;
+      }
+      if (sz > maxVSize) {
+        maxVSize = sz;
+        if (f.vcodec) chosenCodec = f.vcodec.split('.')[0].toUpperCase();
+        if (f.fps) chosenFps = f.fps;
+      }
     });
-  }
+
+    const isVideoOnly = group.some(f => !f.acodec || f.acodec === 'none');
+    let totalBytes = maxVSize;
+    if (isVideoOnly && totalBytes > 0) {
+      totalBytes += maxAudioSize;
+    }
+
+    if (totalBytes === 0) {
+      const qualityBitrate = h >= 2160 ? 15000000 : h >= 1440 ? 8000000 : h >= 1080 ? 4000000 : h >= 720 ? 2000000 : h >= 480 ? 1000000 : 500000;
+      totalBytes = (qualityBitrate * durationSec) / 8;
+    }
+
+    const sizeLabel = formatBytes(totalBytes) || `${(totalBytes / 1024 / 1024).toFixed(1)} MB`;
+
+    let qualityTitle = `${h}p`;
+    let badge = undefined;
+    if (h >= 4320) { qualityTitle = '8K (4320p Ultra HD)'; badge = '8K ULTRA'; }
+    else if (h >= 2160) { qualityTitle = '4K (2160p Ultra HD)'; badge = '4K ULTRA'; }
+    else if (h >= 1440) { qualityTitle = '1440p (2K QHD)'; badge = '2K QHD'; }
+    else if (h >= 1080) { qualityTitle = '1080p (Full HD)'; badge = 'FULL HD'; }
+    else if (h >= 720) { qualityTitle = '720p (HD)'; badge = 'HD'; }
+    else if (h >= 480) { qualityTitle = '480p (SD)'; }
+    else if (h >= 360) { qualityTitle = '360p (Compact)'; }
+    else { qualityTitle = `${h}p (Mobile)`; }
+
+    const fpsStr = chosenFps ? `${chosenFps}fps • ` : '';
+
+    options.push({
+      id: `v-${h}-${Date.now()}`,
+      type: 'video',
+      format: 'MP4',
+      quality: qualityTitle,
+      badge,
+      fileSize: sizeLabel,
+      specs: `${fpsStr}${chosenCodec} Codec`,
+      iconLabel: h >= 2160 ? '4K' : h >= 720 ? 'HD' : 'SD',
+    });
+  });
 
   // Fallback if no video formats array matched
   if (options.length === 0) {
     const mainHeight = info.height || 1080;
-    const rawSize = info.filesize || info.filesize_approx || 0;
-    const sizeLabel = formatBytes(rawSize) || `${((durationSec * 2000000) / 8 / 1024 / 1024).toFixed(1)} MB`;
+    const rawSize = info.filesize || info.filesize_approx || ((2000000 * durationSec) / 8);
+    const sizeLabel = formatBytes(rawSize) || `${(rawSize / 1024 / 1024).toFixed(1)} MB`;
 
     options.push({
       id: `v-main-${Date.now()}`,
@@ -120,7 +141,7 @@ function extractExactFormats(info) {
       quality: `${mainHeight}p High Quality`,
       badge: 'POPULAR',
       fileSize: sizeLabel,
-      specs: 'Standard Full Stream',
+      specs: 'Standard Stream',
       iconLabel: mainHeight >= 720 ? 'HD' : 'SD',
     });
   }
