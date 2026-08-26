@@ -234,8 +234,6 @@ app.post('/api/analyze', async (req, res) => {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android,web',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     });
 
     const title = info.title || 'Extracted Media Stream';
@@ -333,8 +331,6 @@ app.get('/api/download', async (req, res) => {
       ffmpegLocation: ffmpegPath,
       noWarnings: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android,web',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     };
 
     if (isAudio) {
@@ -344,7 +340,18 @@ app.get('/api/download', async (req, res) => {
     }
 
     console.log(`[StreamMate Engine] Executing yt-dlp binary processing for "${cleanTitle}"...`);
-    await exec(mediaUrl, args);
+    try {
+      await exec(mediaUrl, args);
+    } catch (err) {
+      if (err.message.includes('Sign in to confirm') || err.message.includes('bot')) {
+        console.log('[StreamMate Bot Bypass] YouTube bot check detected, retrying with android client fallback...');
+        args.extractorArgs = 'youtube:player_client=android,web';
+        args.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+        await exec(mediaUrl, args);
+      } else {
+        throw err;
+      }
+    }
 
     // Locate generated file in temp dir
     const files = fs.readdirSync(tempDir);
