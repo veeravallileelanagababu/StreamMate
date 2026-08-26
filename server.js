@@ -123,6 +123,7 @@ function extractExactFormats(info) {
       quality: qualityTitle,
       badge,
       fileSize: sizeLabel,
+      bytes: Math.round(totalBytes),
       specs: `${fpsStr}${chosenCodec} Codec`,
       iconLabel: h >= 2160 ? '4K' : h >= 720 ? 'HD' : 'SD',
     });
@@ -141,16 +142,22 @@ function extractExactFormats(info) {
       quality: `${mainHeight}p High Quality`,
       badge: 'POPULAR',
       fileSize: sizeLabel,
+      bytes: Math.round(rawSize),
       specs: 'Standard Stream',
       iconLabel: mainHeight >= 720 ? 'HD' : 'SD',
     });
   }
 
   // 2. AUDIO FORMATS EXTRACTION
-  const mp3Size = formatBytes((durationSec * 320000) / 8) || `${((durationSec * 320000 / 8) / 1024 / 1024).toFixed(1)} MB`;
-  const m4aSize = formatBytes((durationSec * 192000) / 8) || `${((durationSec * 192000 / 8) / 1024 / 1024).toFixed(1)} MB`;
-  const wavSize = formatBytes((durationSec * 1411200) / 8) || `${((durationSec * 1411200 / 8) / 1024 / 1024).toFixed(1)} MB`;
-  const flacSize = formatBytes((durationSec * 700000) / 8) || `${((durationSec * 700000 / 8) / 1024 / 1024).toFixed(1)} MB`;
+  const mp3Bytes = Math.round((durationSec * 320000) / 8);
+  const m4aBytes = Math.round((durationSec * 192000) / 8);
+  const wavBytes = Math.round((durationSec * 1411200) / 8);
+  const flacBytes = Math.round((durationSec * 700000) / 8);
+
+  const mp3Size = formatBytes(mp3Bytes) || `${(mp3Bytes / 1024 / 1024).toFixed(1)} MB`;
+  const m4aSize = formatBytes(m4aBytes) || `${(m4aBytes / 1024 / 1024).toFixed(1)} MB`;
+  const wavSize = formatBytes(wavBytes) || `${(wavBytes / 1024 / 1024).toFixed(1)} MB`;
+  const flacSize = formatBytes(flacBytes) || `${(flacBytes / 1024 / 1024).toFixed(1)} MB`;
 
   options.push(
     {
@@ -160,6 +167,7 @@ function extractExactFormats(info) {
       quality: 'Studio Audio (320 kbps MP3)',
       badge: 'BEST AUDIO',
       fileSize: mp3Size,
+      bytes: mp3Bytes,
       specs: '48kHz • High Fidelity Stereo',
       iconLabel: 'HQ',
       isAudioExtraction: true,
@@ -170,6 +178,7 @@ function extractExactFormats(info) {
       format: 'M4A',
       quality: 'AAC Audio Stream (192 kbps M4A)',
       fileSize: m4aSize,
+      bytes: m4aBytes,
       specs: '44.1kHz • Clean Stream',
       iconLabel: 'HQ',
       isAudioExtraction: true,
@@ -181,6 +190,7 @@ function extractExactFormats(info) {
       quality: 'FLAC Lossless Audio',
       badge: 'LOSSLESS',
       fileSize: flacSize,
+      bytes: flacBytes,
       specs: '24-bit / 96kHz Hi-Res',
       iconLabel: 'FLAC',
       isAudioExtraction: true,
@@ -191,6 +201,7 @@ function extractExactFormats(info) {
       format: 'WAV',
       quality: 'WAV Master Audio',
       fileSize: wavSize,
+      bytes: wavBytes,
       specs: 'Uncompressed PCM',
       iconLabel: 'WAV',
       isAudioExtraction: true,
@@ -268,6 +279,7 @@ app.get('/api/download', async (req, res) => {
   const isAudio = req.query.type === 'audio' || req.query.format === 'mp3';
   const quality = req.query.quality || '1080p';
   const requestedTitle = req.query.title ? String(req.query.title).trim() : null;
+  const expectedBytes = req.query.bytes ? parseInt(String(req.query.bytes), 10) : 0;
 
   if (!mediaUrl) {
     return res.status(400).send('URL query parameter is required');
@@ -283,12 +295,15 @@ app.get('/api/download', async (req, res) => {
   const clientFileName = `${cleanTitle}.${fileExt}`;
   const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
 
-  console.log(`[StreamMate Direct Stream] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality}`);
+  console.log(`[StreamMate Direct Stream] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality} | Expected Bytes: ${expectedBytes || 'chunked'}`);
 
-  // Send attachment headers IMMEDIATELY (< 5ms) so Chrome/Edge/Firefox opens the native download bar
-  // and displays the downloading process in chrome://downloads history right away!
+  // Send attachment headers & Content-Length IMMEDIATELY so Chrome/Edge/Firefox native download manager
+  // displays the exact total size (e.g. 14.2 MB / 85.0 MB) and progress percentage (0% to 100%) in chrome://downloads history!
   res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
   res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+  if (expectedBytes > 0) {
+    res.setHeader('Content-Length', expectedBytes);
+  }
 
   // Select exact quality format filter matching selected resolution height
   let formatArg = 'bestvideo+bestaudio/best';

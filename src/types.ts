@@ -9,6 +9,7 @@ export interface MediaFormatOption {
   quality: string; // '8K (4320p)' | '4K (2160p)' | '1080p (FHD)' | '720p (HD)' | '320kbps' | '192kbps' | etc.
   badge?: string;
   fileSize: string;
+  bytes?: number; // Exact total bytes for Content-Length header
   specs: string; // '60fps • HDR' | '320kbps • Lossless Source'
   iconLabel: string; // '8K' | '4K' | 'HQ' | 'HD' | 'SD' | 'AUDIO' | 'FLAC' | 'WAV' | 'WEBM'
   downloadUrl?: string;

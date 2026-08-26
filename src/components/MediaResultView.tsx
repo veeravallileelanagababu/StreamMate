@@ -256,7 +256,8 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                           const qualityStr = encodeURIComponent(option.quality);
                           const titleStr = encodeURIComponent(media.title);
                           const baseUrl = API_BASE_URL || window.location.origin;
-                          const directUrl = `${baseUrl}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+                          const bytesStr = option.bytes ? `&bytes=${option.bytes}` : '';
+                          const directUrl = `${baseUrl}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}${bytesStr}`;
                           if (navigator.clipboard) {
                             navigator.clipboard.writeText(directUrl);
                           }
@@ -322,7 +323,8 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                         const qualityStr = encodeURIComponent(option.quality);
                         const titleStr = encodeURIComponent(media.title);
                         const baseUrl = API_BASE_URL || window.location.origin;
-                        const directUrl = `${baseUrl}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+                        const bytesStr = option.bytes ? `&bytes=${option.bytes}` : '';
+                        const directUrl = `${baseUrl}/api/download?url=${encodeURIComponent(media.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}${bytesStr}`;
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(directUrl);
                         }

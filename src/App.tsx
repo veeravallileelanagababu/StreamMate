@@ -162,7 +162,8 @@ export default function App() {
       mediaUrl = 'https://www.youtube.com/watch?v=cyberpunk4k';
     }
 
-    const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+    const bytesStr = task.formatOption.bytes ? `&bytes=${task.formatOption.bytes}` : '';
+    const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}${bytesStr}`;
 
     // Trigger direct native browser download so default browser (Chrome, Edge, Firefox)
     // manages file downloading, displays progress bar in browser history & download manager

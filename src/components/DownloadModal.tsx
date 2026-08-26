@@ -25,10 +25,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   onClose,
   onSaveToDisk,
 }) => {
-  if (!task) return null;
-
   const [isSaving, setIsSaving] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  if (!task) return null;
 
   const isCompleted = task.status === 'completed';
   const isAudio = task.formatOption.type === 'audio' || task.formatOption.isAudioExtraction;
@@ -36,7 +36,8 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   const formatStr = task.formatOption.format.toLowerCase();
   const qualityStr = encodeURIComponent(task.formatOption.quality);
   const titleStr = encodeURIComponent(task.mediaItem.title || '');
-  const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(task.mediaItem.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
+  const bytesStr = task.formatOption.bytes ? `&bytes=${task.formatOption.bytes}` : '';
+  const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(task.mediaItem.url)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}${bytesStr}`;
 
   const handleSaveClick = async () => {
     setIsSaving(true);
