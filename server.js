@@ -279,13 +279,12 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// 2. Download API Endpoint - Direct real-time binary streaming for browser download history & progress
+// 2. Download API Endpoint - Solid binary processing & HTTP streaming with exact Content-Length
 app.get('/api/download', async (req, res) => {
   let mediaUrl = req.query.url;
   const isAudio = req.query.type === 'audio' || req.query.format === 'mp3';
   const quality = req.query.quality || '1080p';
   const requestedTitle = req.query.title ? String(req.query.title).trim() : null;
-  const expectedBytes = req.query.bytes ? parseInt(String(req.query.bytes), 10) : 0;
 
   if (!mediaUrl) {
     return res.status(400).send('URL query parameter is required');
@@ -307,15 +306,11 @@ app.get('/api/download', async (req, res) => {
   const clientFileName = `${cleanTitle}.${fileExt}`;
   const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
 
-  console.log(`[StreamMate Direct Stream] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality} | Expected Bytes: ${expectedBytes || 'chunked'}`);
+  console.log(`[StreamMate Download Request] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality}`);
 
-  // Send attachment headers & Content-Length IMMEDIATELY so Chrome/Edge/Firefox native download manager
-  // displays the exact total size (e.g. 14.2 MB / 85.0 MB) and progress percentage (0% to 100%) in chrome://downloads history!
-  res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
-  res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
-  if (expectedBytes > 0) {
-    res.setHeader('Content-Length', expectedBytes);
-  }
+  const tempDir = os.tmpdir();
+  const fileId = `streammate_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const rawOutputFile = path.join(tempDir, `${fileId}.%(ext)s`);
 
   // Select exact quality format filter matching selected resolution height
   let formatArg = 'bestvideo+bestaudio/best';
@@ -330,34 +325,58 @@ app.get('/api/download', async (req, res) => {
   }
 
   try {
-    const proc = ytdlp.exec(
-      mediaUrl,
-      {
-        format: formatArg,
-        output: '-',
-        ffmpegLocation: ffmpegPath,
-        noWarnings: true,
-        noCheckCertificates: true,
-      },
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
+    const args = {
+      output: rawOutputFile,
+      format: formatArg,
+      ffmpegLocation: ffmpegPath,
+      noWarnings: true,
+      noCheckCertificates: true,
+    };
 
-    proc.stdout.pipe(res);
+    if (isAudio) {
+      args.extractAudio = true;
+      args.audioFormat = 'mp3';
+      args.audioQuality = '0';
+    }
 
-    req.on('close', () => {
-      if (proc && !proc.killed) {
-        try {
-          proc.kill('SIGTERM');
-        } catch {
-          // ignore
-        }
+    console.log(`[StreamMate Engine] Executing yt-dlp binary processing for "${cleanTitle}"...`);
+    await exec(mediaUrl, args);
+
+    // Locate generated file in temp dir
+    const files = fs.readdirSync(tempDir);
+    const downloadedFile = files.find((f) => f.startsWith(fileId));
+
+    if (!downloadedFile) {
+      throw new Error('Downloaded binary file not found on disk after processing');
+    }
+
+    const fullPath = path.join(tempDir, downloadedFile);
+    const stats = fs.statSync(fullPath);
+
+    console.log(`[StreamMate Download Success] Streaming file: "${clientFileName}" | Exact Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+    // Set headers WITH exact Content-Length so Chrome opens download manager with 100% accurate file size & progress ring!
+    res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
+    res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+    res.setHeader('Content-Length', stats.size);
+
+    const readStream = fs.createReadStream(fullPath);
+    readStream.pipe(res);
+
+    readStream.on('end', () => {
+      try {
+        fs.unlinkSync(fullPath);
+      } catch {
+        // ignore
       }
     });
 
-    proc.on('error', (err) => {
-      console.error('[StreamMate Stream Error]:', err.message);
-      if (!res.headersSent) {
-        res.status(500).send(`Download failed: ${err.message}`);
+    readStream.on('error', (err) => {
+      console.error('ReadStream error:', err);
+      try {
+        fs.unlinkSync(fullPath);
+      } catch {
+        // ignore
       }
     });
   } catch (err) {
