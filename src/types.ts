@@ -4,6 +4,7 @@ export type PlatformType = 'youtube' | 'instagram' | 'twitter' | 'tiktok' | 'fac
 
 export interface MediaFormatOption {
   id: string;
+  formatId?: string; // Exact yt-dlp format specifier e.g. '137+140'
   type: 'video' | 'audio';
   format: string; // 'MP4' | 'MP3' | 'WEBM' | 'WAV' | 'FLAC' | 'M4A' | 'OPUS' | 'OGG' | 'AVI'
   quality: string; // '8K (4320p)' | '4K (2160p)' | '1080p (FHD)' | '720p (HD)' | '320kbps' | '192kbps' | etc.
@@ -46,6 +47,9 @@ export interface DownloadTask {
   eta: string;
   timestamp: number;
   downloadBlobUrl?: string;
+  transferredBytes?: number;
+  totalBytes?: number;
+  errorMessage?: string;
 }
 
 export interface AdvancedSettings {

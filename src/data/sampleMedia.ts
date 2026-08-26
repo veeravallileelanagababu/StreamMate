@@ -1,6 +1,37 @@
 import { MediaItem, MediaFormatOption, PlatformType } from '../types';
 
-export function generateFullFormatOptions(): MediaFormatOption[] {
+export function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 MB';
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function generateFullFormatOptions(durationSec: number = 215): MediaFormatOption[] {
+  const dur = Math.max(durationSec || 215, 1);
+
+  // Bitrates in bits per second (matching standard web H.264/MP4 stream profiles)
+  const v8kBytes = Math.round((20000000 * dur) / 8);
+  const v4kBytes = Math.round((10000000 * dur) / 8);
+  const v1440pBytes = Math.round((5000000 * dur) / 8);
+  const v1080pBytes = Math.round((2200000 * dur) / 8);
+  const v720pBytes = Math.round((1200000 * dur) / 8);
+  const v480pBytes = Math.round((500000 * dur) / 8);
+  const v360pBytes = Math.round((300000 * dur) / 8);
+
+  const webm4kBytes = Math.round((8500000 * dur) / 8);
+  const webm1080pBytes = Math.round((1800000 * dur) / 8);
+
+  const mp3_320_Bytes = Math.round((320000 * dur) / 8);
+  const mp3_192_Bytes = Math.round((192000 * dur) / 8);
+  const mp3_128_Bytes = Math.round((128000 * dur) / 8);
+  const flacBytes = Math.round((800000 * dur) / 8);
+  const wavBytes = Math.round((1411200 * dur) / 8);
+  const m4aBytes = Math.round((192000 * dur) / 8);
+  const opusBytes = Math.round((160000 * dur) / 8);
+  const oggBytes = Math.round((320000 * dur) / 8);
+
   return [
     // --- VIDEO FORMATS ---
     {
@@ -9,7 +40,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'MP4',
       quality: '8K (4320p Ultra HD)',
       badge: '8K ULTRA',
-      fileSize: '2.4 GB',
+      fileSize: formatBytes(v8kBytes),
+      bytes: v8kBytes,
       specs: '60fps • HDR • AV1 Master',
       iconLabel: '8K',
     },
@@ -19,7 +51,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'MP4',
       quality: '4K (2160p Ultra HD)',
       badge: 'BEST VIDEO',
-      fileSize: '850.5 MB',
+      fileSize: formatBytes(v4kBytes),
+      bytes: v4kBytes,
       specs: '60fps • HDR • H.264 / HEVC',
       iconLabel: '4K',
     },
@@ -29,7 +62,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'MP4',
       quality: '1440p (2K QHD)',
       badge: '2K QHD',
-      fileSize: '420.0 MB',
+      fileSize: formatBytes(v1440pBytes),
+      bytes: v1440pBytes,
       specs: '60fps • High Bitrate',
       iconLabel: 'HD',
     },
@@ -39,7 +73,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'MP4',
       quality: '1080p (Full HD)',
       badge: 'POPULAR',
-      fileSize: '215.2 MB',
+      fileSize: formatBytes(v1080pBytes),
+      bytes: v1080pBytes,
       specs: '60fps • H.264',
       iconLabel: 'HD',
     },
@@ -48,7 +83,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       type: 'video',
       format: 'MP4',
       quality: '720p (HD)',
-      fileSize: '95.8 MB',
+      fileSize: formatBytes(v720pBytes),
+      bytes: v720pBytes,
       specs: '30fps • Standard',
       iconLabel: 'SD',
     },
@@ -57,7 +93,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       type: 'video',
       format: 'MP4',
       quality: '480p (SD)',
-      fileSize: '45.2 MB',
+      fileSize: formatBytes(v480pBytes),
+      bytes: v480pBytes,
       specs: '30fps • Compact Stream',
       iconLabel: 'SD',
     },
@@ -66,7 +103,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       type: 'video',
       format: 'MP4',
       quality: '360p (Mobile)',
-      fileSize: '22.4 MB',
+      fileSize: formatBytes(v360pBytes),
+      bytes: v360pBytes,
       specs: '30fps • Ultra Light',
       iconLabel: 'SD',
     },
@@ -76,7 +114,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'WEBM',
       quality: '4K (2160p WEBM)',
       badge: 'VP9 WEB',
-      fileSize: '790.0 MB',
+      fileSize: formatBytes(webm4kBytes),
+      bytes: webm4kBytes,
       specs: '60fps • VP9 Codec',
       iconLabel: 'WEBM',
     },
@@ -85,7 +124,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       type: 'video',
       format: 'WEBM',
       quality: '1080p (FHD WEBM)',
-      fileSize: '190.5 MB',
+      fileSize: formatBytes(webm1080pBytes),
+      bytes: webm1080pBytes,
       specs: '60fps • VP9 Codec',
       iconLabel: 'WEBM',
     },
@@ -97,7 +137,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'MP3',
       quality: 'Studio Audio (320 kbps)',
       badge: 'BEST AUDIO',
-      fileSize: '15.4 MB',
+      fileSize: formatBytes(mp3_320_Bytes),
+      bytes: mp3_320_Bytes,
       specs: '320kbps • 48kHz Stereo Master',
       iconLabel: 'HQ',
       isAudioExtraction: true,
@@ -107,7 +148,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       type: 'audio',
       format: 'MP3',
       quality: 'Standard MP3 (192 kbps)',
-      fileSize: '9.2 MB',
+      fileSize: formatBytes(mp3_192_Bytes),
+      bytes: mp3_192_Bytes,
       specs: '192kbps • 44.1kHz Stereo',
       iconLabel: 'AUDIO',
       isAudioExtraction: true,
@@ -118,7 +160,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'MP3',
       quality: 'Compact MP3 (128 kbps)',
       badge: 'FAST',
-      fileSize: '6.1 MB',
+      fileSize: formatBytes(mp3_128_Bytes),
+      bytes: mp3_128_Bytes,
       specs: '128kbps • Small File',
       iconLabel: 'AUDIO',
       isAudioExtraction: true,
@@ -129,7 +172,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'FLAC',
       quality: 'Lossless Master (FLAC)',
       badge: 'LOSSLESS',
-      fileSize: '680.4 MB',
+      fileSize: formatBytes(flacBytes),
+      bytes: flacBytes,
       specs: '24-bit 96kHz Lossless Audio',
       iconLabel: 'FLAC',
       isAudioExtraction: true,
@@ -140,7 +184,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'WAV',
       quality: 'Uncompressed WAV PCM',
       badge: 'RAW PCM',
-      fileSize: '520.0 MB',
+      fileSize: formatBytes(wavBytes),
+      bytes: wavBytes,
       specs: '16-bit 44.1kHz Uncompressed',
       iconLabel: 'WAV',
       isAudioExtraction: true,
@@ -151,7 +196,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'M4A',
       quality: 'AAC / M4A (256 kbps)',
       badge: 'AAC APPLE',
-      fileSize: '12.3 MB',
+      fileSize: formatBytes(m4aBytes),
+      bytes: m4aBytes,
       specs: '256kbps • AAC Audio Stream',
       iconLabel: 'AUDIO',
       isAudioExtraction: true,
@@ -162,7 +208,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'OPUS',
       quality: 'Opus Audio (160 kbps)',
       badge: 'OPUS',
-      fileSize: '7.8 MB',
+      fileSize: formatBytes(opusBytes),
+      bytes: opusBytes,
       specs: '160kbps • High Efficiency',
       iconLabel: 'AUDIO',
       isAudioExtraction: true,
@@ -173,7 +220,8 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
       format: 'OGG',
       quality: 'Ogg Vorbis (320 kbps)',
       badge: 'OGG',
-      fileSize: '14.8 MB',
+      fileSize: formatBytes(oggBytes),
+      bytes: oggBytes,
       specs: '320kbps • Vorbis Codec',
       iconLabel: 'AUDIO',
       isAudioExtraction: true,
@@ -184,7 +232,7 @@ export function generateFullFormatOptions(): MediaFormatOption[] {
 export const SAMPLE_PRESETS: MediaItem[] = [
   {
     id: 'cyberpunk-4k',
-    url: 'https://www.youtube.com/watch?v=cyberpunk4k',
+    url: 'https://www.youtube.com/watch?v=1La4QzGeaaQ',
     title: 'Cyberpunk Cityscape 4K HDR Showcase - Night Drive',
     channelOrAuthor: 'NeoTokyo Channel',
     views: '1.2M',
@@ -197,24 +245,24 @@ export const SAMPLE_PRESETS: MediaItem[] = [
     hasAudioTrack: true,
     publishedDate: '2 weeks ago',
     description: 'Ultra-realistic ray-traced futuristic megacity showcase captured in native 4K 60FPS HDR with uncompressed master audio.',
-    formats: generateFullFormatOptions(),
+    formats: generateFullFormatOptions(765),
   },
   {
     id: 'lofi-beats',
-    url: 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+    url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
     title: 'Lofi Chill Vibes & Midnight Coding Beats [Master 320kbps]',
     channelOrAuthor: 'Aesthetic Sounds Studio',
     views: '3.8M',
     duration: '01:42:10',
     durationSeconds: 6130,
-    thumbnailUrl: 'https://img.youtube.com/vi/5qap5aO4i9A/hqdefault.jpg',
+    thumbnailUrl: 'https://img.youtube.com/vi/jfKfPfyJRdk/hqdefault.jpg',
     platform: 'youtube',
     platformName: 'YouTube',
     is4KAvailable: true,
     hasAudioTrack: true,
     publishedDate: '1 month ago',
     description: 'Relaxing ambient beats for study, work, and focus with enhanced low-end frequencies and tape warmth.',
-    formats: generateFullFormatOptions(),
+    formats: generateFullFormatOptions(6130),
   },
   {
     id: 'insta-travel',
@@ -231,7 +279,7 @@ export const SAMPLE_PRESETS: MediaItem[] = [
     hasAudioTrack: true,
     publishedDate: '3 days ago',
     description: 'Stunning alpine views captured at golden hour with ProRes log profile and color grading.',
-    formats: generateFullFormatOptions(),
+    formats: generateFullFormatOptions(58),
   },
   {
     id: 'twitter-tech',
@@ -248,7 +296,7 @@ export const SAMPLE_PRESETS: MediaItem[] = [
     hasAudioTrack: true,
     publishedDate: 'Yesterday',
     description: 'Realtime particle simulation benchmarked across 1,024 tensor processing cores.',
-    formats: generateFullFormatOptions(),
+    formats: generateFullFormatOptions(135),
   },
 ];
 
@@ -432,7 +480,7 @@ export function parseAndGenerateMedia(inputUrl: string, requestedMode: 'all' | '
     hasAudioTrack: true,
     publishedDate: 'Recently uploaded',
     description: `Original media parsed and extracted from ${cleanUrl}. Full resolution video tracks and studio audio streams generated.`,
-    formats: generateFullFormatOptions(),
+    formats: generateFullFormatOptions(durationSeconds),
   };
 }
 
