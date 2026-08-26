@@ -262,7 +262,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// 2. Download API Endpoint - Immediate response headers for live browser download history & streaming
+// 2. Download API Endpoint - Direct real-time binary streaming for browser download history & progress
 app.get('/api/download', async (req, res) => {
   let mediaUrl = req.query.url;
   const isAudio = req.query.type === 'audio' || req.query.format === 'mp3';
@@ -283,68 +283,54 @@ app.get('/api/download', async (req, res) => {
   const clientFileName = `${cleanTitle}.${fileExt}`;
   const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
 
-  console.log(`[StreamMate Download Request] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality}`);
+  console.log(`[StreamMate Direct Stream] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality}`);
 
-  // Send attachment headers IMMEDIATELY so Chrome/Edge/Firefox opens the native download bar
+  // Send attachment headers IMMEDIATELY (< 5ms) so Chrome/Edge/Firefox opens the native download bar
   // and displays the downloading process in chrome://downloads history right away!
   res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
   res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
 
-  const tempDir = os.tmpdir();
-  const fileId = `streammate_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-  const rawOutputFile = path.join(tempDir, `${fileId}.%(ext)s`);
+  // Select exact quality format filter matching selected resolution height
+  let formatArg = 'bestvideo+bestaudio/best';
+  if (isAudio) {
+    formatArg = 'bestaudio/best';
+  } else {
+    const match = quality.match(/(\d+)p/i);
+    if (match && match[1]) {
+      const reqHeight = parseInt(match[1], 10);
+      formatArg = `bestvideo[height<=${reqHeight}]+bestaudio/best[height<=${reqHeight}]/best`;
+    }
+  }
 
   try {
-    // Select exact quality format filter matching selected resolution height
-    let formatArg = 'bestvideo+bestaudio/best';
-    if (isAudio) {
-      formatArg = 'bestaudio/best';
-    } else {
-      const match = quality.match(/(\d+)p/i);
-      if (match && match[1]) {
-        const reqHeight = parseInt(match[1], 10);
-        // Target exact resolution height requested by user (e.g. 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p)
-        formatArg = `bestvideo[height<=${reqHeight}]+bestaudio/best[height<=${reqHeight}]/best`;
-      }
-    }
+    const proc = ytdlp.exec(
+      mediaUrl,
+      {
+        format: formatArg,
+        output: '-',
+        ffmpegLocation: ffmpegPath,
+        noWarnings: true,
+        noCheckCertificates: true,
+      },
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
 
-    const args = {
-      output: rawOutputFile,
-      format: formatArg,
-      ffmpegLocation: ffmpegPath,
-      noWarnings: true,
-      noCheckCertificates: true,
-    };
+    proc.stdout.pipe(res);
 
-    console.log(`[StreamMate Engine] Executing yt-dlp binary stream for target: "${cleanTitle}"...`);
-    await exec(mediaUrl, args);
-
-    // Locate generated file in temp dir
-    const files = fs.readdirSync(tempDir);
-    const downloadedFile = files.find((f) => f.startsWith(fileId));
-
-    if (!downloadedFile) {
-      throw new Error('Downloaded binary file not found on disk');
-    }
-
-    const fullPath = path.join(tempDir, downloadedFile);
-    const readStream = fs.createReadStream(fullPath);
-    readStream.pipe(res);
-
-    readStream.on('end', () => {
-      try {
-        fs.unlinkSync(fullPath);
-      } catch {
-        // ignore
+    req.on('close', () => {
+      if (proc && !proc.killed) {
+        try {
+          proc.kill('SIGTERM');
+        } catch {
+          // ignore
+        }
       }
     });
 
-    readStream.on('error', (err) => {
-      console.error('ReadStream error:', err);
-      try {
-        fs.unlinkSync(fullPath);
-      } catch {
-        // ignore
+    proc.on('error', (err) => {
+      console.error('[StreamMate Stream Error]:', err.message);
+      if (!res.headersSent) {
+        res.status(500).send(`Download failed: ${err.message}`);
       }
     });
   } catch (err) {
