@@ -295,18 +295,17 @@ app.get('/api/download', async (req, res) => {
   const rawOutputFile = path.join(tempDir, `${fileId}.%(ext)s`);
 
   try {
-    // Select quality format filter
+    // Select exact quality format filter matching selected resolution height
     let formatArg = 'bestvideo+bestaudio/best';
     if (isAudio) {
       formatArg = 'bestaudio/best';
-    } else if (quality.includes('1080p')) {
-      formatArg = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best';
-    } else if (quality.includes('1440p') || quality.includes('2K')) {
-      formatArg = 'bestvideo[height<=1440]+bestaudio/best[height<=1440]/best';
-    } else if (quality.includes('720p')) {
-      formatArg = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best';
-    } else if (quality.includes('480p') || quality.includes('360p')) {
-      formatArg = 'bestvideo[height<=480]+bestaudio/best[height<=480]/best';
+    } else {
+      const match = quality.match(/(\d+)p/i);
+      if (match && match[1]) {
+        const reqHeight = parseInt(match[1], 10);
+        // Target exact resolution height requested by user (e.g. 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p)
+        formatArg = `bestvideo[height<=${reqHeight}]+bestaudio/best[height<=${reqHeight}]/best`;
+      }
     }
 
     const args = {
