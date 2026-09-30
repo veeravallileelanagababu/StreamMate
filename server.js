@@ -401,9 +401,21 @@ app.post('/api/analyze', async (req, res) => {
       });
       if (pageRes.ok) {
         const html = await pageRes.text();
-        const match = html.match(/"lengthSeconds":"(\d+)"/);
-        if (match && match[1]) {
-          durationSeconds = parseInt(match[1], 10);
+        const isoMatch = html.match(/itemprop="duration"\s+content="([^"]+)"/);
+        if (isoMatch && isoMatch[1]) {
+          const m = isoMatch[1].match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+          if (m) {
+            const h = parseInt(m[1] || '0', 10);
+            const min = parseInt(m[2] || '0', 10);
+            const sec = parseInt(m[3] || '0', 10);
+            const totalSec = h * 3600 + min * 60 + sec;
+            if (totalSec > 0) durationSeconds = totalSec;
+          }
+        } else {
+          const match = html.match(/"lengthSeconds":"(\d+)"/);
+          if (match && match[1]) {
+            durationSeconds = parseInt(match[1], 10);
+          }
         }
       }
     } catch {}
@@ -433,6 +445,7 @@ app.post('/api/analyze', async (req, res) => {
       platformName: 'YouTube Stream',
       views: '500K',
       formats,
+      debug_error: ytErr ? ytErr.message : null,
     });
   } catch (err) {
     console.error('Analyze backend error:', err.message);
