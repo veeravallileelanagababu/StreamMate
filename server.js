@@ -324,6 +324,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 
   let info = null;
+  let ytErrorMsg = null;
 
   // 1. Try yt-dlp with android player client directly (fast, bypasses bot verification on Render cloud IPs)
   try {
@@ -334,6 +335,7 @@ app.post('/api/analyze', async (req, res) => {
       extractorArgs: 'youtube:player_client=android',
     });
   } catch (ytErr) {
+    ytErrorMsg = ytErr.message;
     console.warn('[StreamMate Analyze] yt-dlp android failed, falling back to smart metadata scraper...', ytErr.message);
   }
 
@@ -445,7 +447,7 @@ app.post('/api/analyze', async (req, res) => {
       platformName: 'YouTube Stream',
       views: '500K',
       formats,
-      debug_error: ytErr ? ytErr.message : null,
+      debug_error: ytErrorMsg,
     });
   } catch (err) {
     console.error('Analyze backend error:', err.message);
