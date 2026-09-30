@@ -6,9 +6,9 @@ import { HeroInput } from './components/HeroInput';
 import { SupportedPlatforms } from './components/SupportedPlatforms';
 import { QualitySettings } from './components/QualitySettings';
 import { MediaResultView } from './components/MediaResultView';
-import { DownloadModal } from './components/DownloadModal';
 import { MediaPreviewModal } from './components/MediaPreviewModal';
 import { Footer } from './components/Footer';
+import { Download, CheckCircle2 } from 'lucide-react';
 
 import { generatePlayableAudioBlob, generatePlayableVideoBlob } from './utils/mediaGenerator';
 import { API_BASE_URL } from './config';
@@ -18,9 +18,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentMedia, setCurrentMedia] = useState<MediaItem | null>(null);
 
-  // Modals & Drawers
-  const [activeTask, setActiveTask] = useState<DownloadTask | null>(null);
+  // Modals & Notifications
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [downloadToast, setDownloadToast] = useState<{ title: string; quality: string; format: string } | null>(null);
 
   // Analyze URL or Preset
   const handleAnalyze = async (inputUrl: string) => {
@@ -96,218 +96,22 @@ export default function App() {
     }, 400);
   };
 
-  // Trigger Download or Audio Conversion
-  // Helper speed & ETA formatters
-  const formatSpeedStr = (bytesPerSec: number): string => {
-    if (!bytesPerSec || bytesPerSec <= 0) return '0.0 MB/s';
-    if (bytesPerSec >= 1024 * 1024) {
-      return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
-    }
-    return `${(bytesPerSec / 1024).toFixed(0)} KB/s`;
-  };
-
-  const formatEtaStr = (seconds: number): string => {
-    if (!seconds || seconds <= 0 || !isFinite(seconds)) return '0s left';
-    if (seconds < 60) return `${Math.ceil(seconds)}s left`;
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.ceil(seconds % 60);
-    return `${mins}m ${secs}s left`;
-  };
-
-  // Trigger Live Stream Downloading with real-time percentage progress bar
-  const handleDownloadOption = async (option: MediaFormatOption) => {
+  // Trigger Direct Native Browser Download (appears in browser download history Ctrl+J)
+  // Show toast notification when download link is clicked
+  const handleDownloadOption = (option: MediaFormatOption) => {
     if (!currentMedia) return;
 
-    const isAudio = option.type === 'audio' || option.isAudioExtraction;
-    const typeStr = isAudio ? 'audio' : 'video';
-    const formatStr = option.format.toLowerCase();
-    const qualityStr = encodeURIComponent(option.quality);
-    const titleStr = encodeURIComponent(currentMedia.title || '');
+    // Show non-intrusive toast feedback confirming the browser download
+    setDownloadToast({
+      title: currentMedia.title || 'Media File',
+      quality: option.quality,
+      format: option.format,
+    });
 
-    let mediaUrl = currentMedia.url ? currentMedia.url.trim() : '';
-    if (mediaUrl && !mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
-      mediaUrl = `https://${mediaUrl}`;
-    }
-    if (!mediaUrl) {
-      mediaUrl = 'https://www.youtube.com/watch?v=1La4QzGeaaQ';
-    }
-
-    const bytesStr = option.bytes ? `&bytes=${option.bytes}` : '';
-    const formatIdStr = option.formatId ? `&formatId=${encodeURIComponent(option.formatId)}` : '';
-    const downloadApiUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}${bytesStr}${formatIdStr}`;
-
-    const taskId = `task-${Date.now()}`;
-    const targetTotalBytes = option.bytes || 0;
-
-    // 100% REAL INITIAL STATE: 0 bytes transferred, pure real network connection
-    const initialTask: DownloadTask = {
-      id: taskId,
-      mediaItem: currentMedia,
-      formatOption: option,
-      progress: 0,
-      status: 'fetching_stream',
-      downloadSpeed: 'Connecting...',
-      eta: 'Calculating...',
-      timestamp: Date.now(),
-      transferredBytes: 0,
-      totalBytes: targetTotalBytes,
-    };
-
-    setActiveTask(initialTask);
-
-    try {
-      const response = await fetch(downloadApiUrl);
-
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
-      }
-
-      const contentLengthHeader = response.headers.get('content-length');
-      const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : targetTotalBytes;
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body stream reader unavailable');
-      }
-
-      const chunks: Uint8Array[] = [];
-      let receivedBytes = 0;
-      const startTime = Date.now();
-      let lastUpdateTime = Date.now();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        if (value) {
-          chunks.push(value);
-          receivedBytes += value.length;
-        }
-
-        const now = Date.now();
-        if (now - lastUpdateTime > 50 || done) {
-          lastUpdateTime = now;
-          const elapsedSec = Math.max((now - startTime) / 1000, 0.05);
-          
-          // 100% REAL NETWORK SPEED: Bytes received over real network / elapsed seconds
-          const speedBps = receivedBytes / elapsedSec;
-          const remainingBytes = totalBytes > receivedBytes ? totalBytes - receivedBytes : 0;
-          
-          // 100% REAL ETA: Remaining bytes / real speed
-          const etaSec = speedBps > 0 ? remainingBytes / speedBps : 0;
-
-          // 100% REAL PERCENTAGE: Bytes received / total bytes
-          const pct = totalBytes > 0
-            ? Math.min(99, Math.round((receivedBytes / totalBytes) * 100))
-            : Math.min(95, Math.round(receivedBytes / 100000));
-
-          setActiveTask({
-            id: taskId,
-            mediaItem: currentMedia,
-            formatOption: option,
-            progress: pct,
-            status: 'fetching_stream',
-            downloadSpeed: formatSpeedStr(speedBps),
-            eta: formatEtaStr(etaSec),
-            timestamp: Date.now(),
-            transferredBytes: receivedBytes,
-            totalBytes: totalBytes || receivedBytes,
-          });
-        }
-      }
-
-      // Download 100% complete! Create blob and save to disk
-      const ext = (option.format || (isAudio ? 'mp3' : 'mp4')).toLowerCase();
-      const mimeType = ext === 'mp3' ? 'audio/mpeg' : ext === 'm4a' ? 'audio/mp4' : ext === 'wav' ? 'audio/wav' : ext === 'flac' ? 'audio/flac' : ext === 'webm' ? 'video/webm' : 'video/mp4';
-      const blob = new Blob(chunks, { type: mimeType });
-      const blobUrl = URL.createObjectURL(blob);
-
-      const completedTask: DownloadTask = {
-        id: taskId,
-        mediaItem: currentMedia,
-        formatOption: option,
-        progress: 100,
-        status: 'completed',
-        downloadSpeed: '0 MB/s',
-        eta: '0s',
-        timestamp: Date.now(),
-        downloadBlobUrl: blobUrl,
-        transferredBytes: receivedBytes,
-        totalBytes: receivedBytes,
-      };
-
-      setActiveTask(completedTask);
-
-      // Automatically trigger browser file download to device
-      const cleanTitle = (currentMedia.title || 'StreamMate_Media')
-        .replace(/[\\/:*?"<>|]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const fileName = `${cleanTitle}.${ext}`;
-
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err: any) {
-      console.error('Live stream download error:', err);
-      // Direct link fallback
-      const link = document.createElement('a');
-      link.href = downloadApiUrl;
-      link.download = '';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setActiveTask({
-        id: taskId,
-        mediaItem: currentMedia,
-        formatOption: option,
-        progress: 100,
-        status: 'completed',
-        downloadSpeed: 'Completed',
-        eta: '0s',
-        timestamp: Date.now(),
-      });
-    }
-  };
-
-  const handleSaveToDisk = async (task: DownloadTask) => {
-    if (task.downloadBlobUrl) {
-      const isAudio = task.formatOption.type === 'audio' || task.formatOption.isAudioExtraction;
-      const cleanTitle = (task.mediaItem.title || 'StreamMate_Media')
-        .replace(/[\\/:*?"<>|]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const ext = isAudio ? 'mp3' : task.formatOption.format.toLowerCase() || 'mp4';
-      const fileName = `${cleanTitle}.${ext}`;
-
-      const link = document.createElement('a');
-      link.href = task.downloadBlobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      const isAudio = task.formatOption.type === 'audio' || task.formatOption.isAudioExtraction;
-      const typeStr = isAudio ? 'audio' : 'video';
-      const formatStr = task.formatOption.format.toLowerCase();
-      const qualityStr = encodeURIComponent(task.formatOption.quality);
-      const titleStr = encodeURIComponent(task.mediaItem.title || '');
-      let mediaUrl = task.mediaItem.url ? task.mediaItem.url.trim() : '';
-      if (!mediaUrl) mediaUrl = 'https://www.youtube.com/watch?v=1La4QzGeaaQ';
-
-      const directDownloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}`;
-
-      const link = document.createElement('a');
-      link.href = directDownloadUrl;
-      link.download = '';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    // Auto-dismiss toast notification after 6 seconds
+    setTimeout(() => {
+      setDownloadToast(null);
+    }, 6000);
   };
 
   const handleResetToHome = () => {
@@ -356,12 +160,32 @@ export default function App() {
       {/* Footer */}
       <Footer />
 
-      {/* Modals and Overlays */}
-      <DownloadModal
-        task={activeTask}
-        onClose={() => setActiveTask(null)}
-        onSaveToDisk={handleSaveToDisk}
-      />
+      {/* Non-intrusive Browser Download Toast Notification */}
+      {downloadToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-[#131b2e]/95 backdrop-blur-md border border-[#10b981]/40 text-white px-4 py-3 rounded-xl shadow-2xl shadow-black/60 transition-all duration-300">
+          <div className="w-9 h-9 rounded-lg bg-[#10b981]/20 border border-[#10b981]/40 flex items-center justify-center text-[#10b981] flex-shrink-0">
+            <Download className="w-5 h-5 animate-bounce" />
+          </div>
+          <div className="pr-2">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#10b981]" />
+              <span className="text-xs font-bold text-[#4edea3] uppercase tracking-wider">Download Sent to Browser</span>
+            </div>
+            <p className="text-xs text-white font-medium max-w-[280px] truncate mt-0.5">
+              {downloadToast.title}
+            </p>
+            <p className="text-[11px] text-[#94a3b8] mt-0.5 font-['JetBrains_Mono',monospace]">
+              {downloadToast.format} • {downloadToast.quality} — Check browser downloads (Ctrl+J)
+            </p>
+          </div>
+          <button
+            onClick={() => setDownloadToast(null)}
+            className="text-[#94a3b8] hover:text-white text-xs px-2 py-1 rounded bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449] cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
 
 

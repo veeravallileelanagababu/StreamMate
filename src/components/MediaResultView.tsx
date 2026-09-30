@@ -50,6 +50,21 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
     return true;
   });
 
+  const getDownloadUrl = (option: MediaFormatOption) => {
+    const isAudio = option.type === 'audio' || option.isAudioExtraction;
+    const typeStr = isAudio ? 'audio' : 'video';
+    const formatStr = option.format.toLowerCase();
+    const qualityStr = encodeURIComponent(option.quality);
+    const titleStr = encodeURIComponent(media.title || '');
+    let mediaUrl = media.url ? media.url.trim() : '';
+    if (mediaUrl && !mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
+      mediaUrl = `https://${mediaUrl}`;
+    }
+    const bytesStr = option.bytes ? `&bytes=${option.bytes}` : '';
+    const formatIdStr = option.formatId ? `&formatId=${encodeURIComponent(option.formatId)}` : '';
+    return `${API_BASE_URL}/api/download?url=${encodeURIComponent(mediaUrl)}&type=${typeStr}&quality=${qualityStr}&format=${formatStr}&title=${titleStr}${bytesStr}${formatIdStr}`;
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8">
       {/* Top back / action bar */}
@@ -270,14 +285,15 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                         <span className="hidden sm:inline">Copy Link</span>
                       </button>
 
-                      <button
+                      <a
                         id={`btn-download-${option.id}`}
+                        href={getDownloadUrl(option)}
                         onClick={() => onDownloadOption(option)}
                         className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#10b981] hover:bg-[#059669] active:scale-98 text-[#002113] font-bold text-xs sm:text-sm tracking-wide transition-all shadow-md shadow-[#10b981]/20 cursor-pointer whitespace-nowrap"
                       >
                         <Music className="w-4 h-4 fill-current" />
                         <span>Download Audio</span>
-                      </button>
+                      </a>
                     </div>
                   </div>
                 );
@@ -337,14 +353,15 @@ export const MediaResultView: React.FC<MediaResultViewProps> = ({
                       <span className="hidden sm:inline">Copy Link</span>
                     </button>
 
-                    <button
+                    <a
                       id={`btn-download-${option.id}`}
+                      href={getDownloadUrl(option)}
                       onClick={() => onDownloadOption(option)}
                       className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#171f33] hover:bg-[#222a3d] active:scale-98 border border-[#334155] hover:border-[#6366f1] text-[#dae2fd] hover:text-white font-semibold text-xs sm:text-sm transition-all shadow-sm cursor-pointer whitespace-nowrap"
                     >
                       <Download className="w-4 h-4 text-[#818cf8]" />
                       <span>Download Video</span>
-                    </button>
+                    </a>
                   </div>
                 </div>
               );

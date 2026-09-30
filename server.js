@@ -5,8 +5,9 @@ import ffmpegPath from 'ffmpeg-static';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 
+const ytdlpBinPath = path.resolve('node_modules/yt-dlp-exec/bin/yt-dlp.exe');
 const exec = ytdlp.exec || ytdlp;
 const app = express();
 app.use(express.json());
@@ -350,12 +351,13 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// 2. Download API Endpoint - Solid binary processing & HTTP streaming with exact Content-Length
+// 2. Download API Endpoint - Direct real-time binary streaming for browser download history & progress
 app.get('/api/download', async (req, res) => {
   let mediaUrl = req.query.url;
   const isAudio = req.query.type === 'audio' || req.query.format === 'mp3';
   const quality = req.query.quality || '1080p';
   const requestedTitle = req.query.title ? String(req.query.title).trim() : null;
+  const expectedBytes = req.query.bytes ? parseInt(String(req.query.bytes), 10) : 0;
 
   if (!mediaUrl) {
     return res.status(400).send('URL query parameter is required');
@@ -377,20 +379,21 @@ app.get('/api/download', async (req, res) => {
   const clientFileName = `${cleanTitle}.${fileExt}`;
   const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
 
-  console.log(`[StreamMate Download Request] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality}`);
+  console.log(`[StreamMate Direct Stream] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality} | Expected Bytes: ${expectedBytes || 'auto'}`);
 
-  const tempDir = os.tmpdir();
-  const fileId = `streammate_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-  const rawOutputFile = path.join(tempDir, `${fileId}.%(ext)s`);
+  // Send attachment headers & Content-Length IMMEDIATELY so Chrome/Edge native download manager
+  // opens and displays the file progress (e.g. 13.7 MB of 50.9 MB) in browser download history!
+  res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
+  res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+  if (expectedBytes > 0) {
+    res.setHeader('Content-Length', expectedBytes);
+  }
 
   const requestedFormatId = req.query.formatId ? String(req.query.formatId).trim() : null;
 
-  // Select exact quality format filter matching selected resolution height or explicit formatId
   let formatArg = requestedFormatId || 'bestvideo+bestaudio/best';
   if (isAudio) {
-    if (!requestedFormatId) {
-      formatArg = 'bestaudio/best';
-    }
+    formatArg = requestedFormatId || 'bestaudio/best';
   } else if (!requestedFormatId) {
     const match = quality.match(/(\d+)p/i);
     if (match && match[1]) {
@@ -399,98 +402,64 @@ app.get('/api/download', async (req, res) => {
     }
   }
 
+  const ytdlpArgs = [
+    mediaUrl,
+    '-o', '-',
+    '--ffmpeg-location', ffmpegPath,
+    '--no-warnings',
+    '--no-check-certificates',
+  ];
+
+  if (isAudio) {
+    ytdlpArgs.push('-x', '--audio-format', 'mp3');
+  } else {
+    ytdlpArgs.push('-f', formatArg);
+  }
+
   try {
-    const args = {
-      output: rawOutputFile,
-      format: formatArg,
-      ffmpegLocation: ffmpegPath,
-      noWarnings: true,
-      noCheckCertificates: true,
-    };
+    const proc = spawn(ytdlpBinPath, ytdlpArgs, {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 
-    if (isAudio) {
-      args.extractAudio = true;
-      args.audioFormat = 'mp3';
-      args.audioQuality = '0';
-    }
+    let bytesSent = 0;
+    proc.stdout.on('data', (chunk) => {
+      bytesSent += chunk.length;
+      res.write(chunk);
+    });
 
-    let fullPath = null;
-    console.log(`[StreamMate Engine] Executing yt-dlp binary processing for "${cleanTitle}"...`);
-    try {
-      await exec(mediaUrl, args);
-      const files = fs.readdirSync(tempDir);
-      const downloadedFile = files.find((f) => f.startsWith(fileId));
-      if (downloadedFile) {
-        fullPath = path.join(tempDir, downloadedFile);
-      }
-    } catch (err) {
-      if (err.message.includes('Sign in to confirm') || err.message.includes('bot')) {
-        console.log('[StreamMate Bot Bypass] YouTube bot check detected, retrying with android client fallback...');
-        try {
-          args.extractorArgs = 'youtube:player_client=android,web';
-          args.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-          await exec(mediaUrl, args);
-          const files = fs.readdirSync(tempDir);
-          const downloadedFile = files.find((f) => f.startsWith(fileId));
-          if (downloadedFile) {
-            fullPath = path.join(tempDir, downloadedFile);
-          }
-        } catch {
-          // fallback below
-        }
-      }
-    }
+    proc.stdout.on('end', () => {
+      console.log(`[StreamMate Stream Finished] Successfully streamed ${bytesSent} bytes for "${clientFileName}"`);
+      res.end();
+    });
 
-    // Fallback binary generator if yt-dlp encountered restricted/unavailable link
-    if (!fullPath || !fs.existsSync(fullPath)) {
-      console.log(`[StreamMate Engine Fallback] Generating stream package for "${cleanTitle}"...`);
-      const fallbackFile = path.join(tempDir, `${fileId}.${fileExt}`);
-      try {
-        if (isAudio) {
-          execSync(`"${ffmpegPath}" -y -f lavfi -i sine=frequency=440:duration=8 -b:a 320k "${fallbackFile}"`, { stdio: 'ignore' });
-        } else {
-          execSync(`"${ffmpegPath}" -y -f lavfi -i testsrc=duration=6:size=1280x720:rate=30 -f lavfi -i sine=frequency=440:duration=6 -c:v libx264 -c:a aac -pix_fmt yuv420p "${fallbackFile}"`, { stdio: 'ignore' });
-        }
-        fullPath = fallbackFile;
-      } catch (ffErr) {
-        console.error('Fallback ffmpeg error:', ffErr.message);
-      }
-    }
-
-    if (!fullPath || !fs.existsSync(fullPath)) {
-      throw new Error('Downloaded binary file not found on disk after processing');
-    }
-
-    const stats = fs.statSync(fullPath);
-
-    console.log(`[StreamMate Download Success] Streaming file: "${clientFileName}" | Exact Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-
-    // Set headers WITH exact Content-Length so Chrome opens download manager with 100% accurate file size & progress ring!
-    res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
-    res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
-    res.setHeader('Content-Length', stats.size);
-
-    const readStream = fs.createReadStream(fullPath);
-    readStream.pipe(res);
-
-    readStream.on('end', () => {
-      try {
-        fs.unlinkSync(fullPath);
-      } catch {
-        // ignore
+    proc.stderr.on('data', (data) => {
+      const msg = data.toString();
+      if (msg.includes('ERROR') || msg.includes('bot')) {
+        console.warn(`[StreamMate Stream Notice]: ${msg.trim()}`);
       }
     });
 
-    readStream.on('error', (err) => {
-      console.error('ReadStream error:', err);
-      try {
-        fs.unlinkSync(fullPath);
-      } catch {
-        // ignore
+    proc.on('error', (err) => {
+      console.error('[StreamMate Proc Error]:', err.message);
+      if (!res.headersSent) {
+        res.status(500).send(`Stream error: ${err.message}`);
+      } else {
+        res.end();
+      }
+    });
+
+    req.on('close', () => {
+      if (proc && !proc.killed) {
+        try {
+          proc.kill('SIGTERM');
+        } catch {
+          // ignore
+        }
       }
     });
   } catch (err) {
-    console.error('[StreamMate Download Failure]:', err.message);
+    console.error('[StreamMate Direct Stream Failure]:', err.message);
     if (!res.headersSent) {
       res.status(500).send(`Download failed: ${err.message}`);
     }
