@@ -325,27 +325,16 @@ app.post('/api/analyze', async (req, res) => {
 
   let info = null;
 
-  // 1. Try yt-dlp with android player client (bypasses bot verification completely on cloud/Render datacenter IPs)
+  // 1. Try yt-dlp with android player client directly (fast, bypasses bot verification on Render cloud IPs)
   try {
     info = await ytdlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android,web',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      extractorArgs: 'youtube:player_client=android',
     });
   } catch (ytErr) {
-    console.warn('[StreamMate Analyze] android,web attempt failed, trying android only...', ytErr.message);
-    try {
-      info = await ytdlp(url, {
-        dumpSingleJson: true,
-        noWarnings: true,
-        noCheckCertificates: true,
-        extractorArgs: 'youtube:player_client=android',
-      });
-    } catch (androidErr) {
-      console.warn('[StreamMate Analyze] yt-dlp android failed, falling back to smart metadata scraper...', androidErr.message);
-    }
+    console.warn('[StreamMate Analyze] yt-dlp android failed, falling back to smart metadata scraper...', ytErr.message);
   }
 
   // 2. If yt-dlp extracted successfully
