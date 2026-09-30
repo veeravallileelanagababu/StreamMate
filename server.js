@@ -7,15 +7,37 @@ import fs from 'fs';
 import os from 'os';
 import { execSync, spawn } from 'child_process';
 
-const ytdlpBinPath = path.resolve('node_modules/yt-dlp-exec/bin/yt-dlp.exe');
+const getYtDlpPath = () => {
+  const candidates = [
+    path.resolve('node_modules/yt-dlp-exec/bin/yt-dlp'),
+    path.resolve('node_modules/yt-dlp-exec/bin/yt-dlp.exe'),
+    path.resolve('bin/yt-dlp'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return 'yt-dlp';
+};
+const ytdlpBinPath = getYtDlpPath();
 const exec = ytdlp.exec || ytdlp;
 const app = express();
 app.use(express.json());
 
 // CORS headers for local & production deployment
 app.use((req, res, next) => {
-  const allowedOrigin = process.env.FRONTEND_URL || '*';
-  res.header('Access-Control-Allow-Origin', allowedOrigin);
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'https://streammate-six.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ].filter(Boolean);
+
+  if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
