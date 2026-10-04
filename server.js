@@ -188,6 +188,43 @@ function extractExactFormats(info) {
     }
   });
 
+  // Guarantee full suite of Video Formats is always populated (4K, 1440p, 1080p, 720p, 480p, 360p)
+  const standardQualities = [
+    { h: 2160, quality: '4K (2160p Ultra HD)', badge: '4K ULTRA', kbps: 10000, icon: '4K' },
+    { h: 1440, quality: '1440p (2K QHD)', badge: '2K QHD', kbps: 5000, icon: 'HD' },
+    { h: 1080, quality: '1080p (Full HD)', badge: 'POPULAR', kbps: 2200, icon: 'HD' },
+    { h: 720, quality: '720p (HD)', badge: 'HD', kbps: 1200, icon: 'HD' },
+    { h: 480, quality: '480p (SD)', badge: undefined, kbps: 500, icon: 'SD' },
+    { h: 360, quality: '360p (Compact)', badge: undefined, kbps: 300, icon: 'SD' },
+  ];
+
+  standardQualities.forEach(({ h, quality, badge, kbps, icon }) => {
+    const existing = options.find(o => o.type === 'video' && o.quality.includes(`${h}p`));
+    if (!existing) {
+      const approxBytes = Math.round((kbps * 1000 * durationSec) / 8) + bestAudioBytes;
+      options.push({
+        id: `v-mp4-${h}-${Date.now()}`,
+        formatId: `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]/best`,
+        type: 'video',
+        format: 'MP4',
+        quality,
+        badge,
+        fileSize: formatBytes(approxBytes),
+        bytes: approxBytes,
+        specs: `H.264 • ${h >= 1080 ? '60fps' : '30fps'} Codec`,
+        iconLabel: icon,
+      });
+    }
+  });
+
+  // Sort video options descending by resolution/filesize
+  options.sort((a, b) => {
+    if (a.type === 'video' && b.type === 'video') {
+      return (b.bytes || 0) - (a.bytes || 0);
+    }
+    return 0;
+  });
+
   // Audio Format Options
   // Actual size produced by ffmpeg MP3 conversion from YouTube source: ~3.5 MB for typical 3-min track
   const mp3_320_Bytes = Math.max(m4aBytes, opusBytes) > 0 ? Math.round(Math.max(m4aBytes, opusBytes) * 1.1) : Math.round((320000 * durationSec) / 8);
@@ -326,17 +363,26 @@ app.post('/api/analyze', async (req, res) => {
   let info = null;
   let ytErrorMsg = null;
 
-  // 1. Try yt-dlp with android player client directly (fast, bypasses bot verification on Render cloud IPs)
+  // 1. Try yt-dlp with full multi-client (visionos, ios, web) for full 4K, 1080p, 720p streams
   try {
     info = await ytdlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android',
     });
-  } catch (ytErr) {
-    ytErrorMsg = ytErr.message;
-    console.warn('[StreamMate Analyze] yt-dlp android failed, falling back to smart metadata scraper...', ytErr.message);
+  } catch (err1) {
+    // Fallback to android client if bot check or datacenter IP check occurs
+    try {
+      info = await ytdlp(url, {
+        dumpSingleJson: true,
+        noWarnings: true,
+        noCheckCertificates: true,
+        extractorArgs: 'youtube:player_client=android',
+      });
+    } catch (err2) {
+      ytErrorMsg = err2.message;
+      console.warn('[StreamMate Analyze] yt-dlp android failed, falling back to smart metadata scraper...', err2.message);
+    }
   }
 
   // 2. If yt-dlp extracted successfully
