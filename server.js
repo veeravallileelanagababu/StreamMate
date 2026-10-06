@@ -28,7 +28,6 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   const allowedOrigins = [
     process.env.FRONTEND_URL,
-    'https://streammate-six.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173',
   ].filter(Boolean);
@@ -44,7 +43,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint for Render monitoring
+// Health check endpoint
 app.get(['/', '/api/health'], (req, res) => {
   res.json({ status: 'ok', service: 'StreamMate Backend Engine', timestamp: new Date().toISOString() });
 });
