@@ -506,7 +506,6 @@ app.get('/api/download', async (req, res) => {
   const isAudio = req.query.type === 'audio' || req.query.format === 'mp3';
   const quality = req.query.quality || '1080p';
   const requestedTitle = req.query.title ? String(req.query.title).trim() : null;
-  const expectedBytes = req.query.bytes ? parseInt(String(req.query.bytes), 10) : 0;
 
   if (!mediaUrl) {
     return res.status(400).send('URL query parameter is required');
@@ -524,31 +523,31 @@ app.get('/api/download', async (req, res) => {
   }
 
   const cleanTitle = sanitizeFilename(requestedTitle || 'StreamMate_Media');
-  const fileExt = isAudio ? 'mp3' : 'mp4';
+  const requestedFormat = (req.query.format || '').toLowerCase();
+  const fileExt = isAudio ? (requestedFormat || 'mp3') : (requestedFormat === 'webm' ? 'webm' : 'mp4');
   const clientFileName = `${cleanTitle}.${fileExt}`;
   const safeAsciiName = clientFileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
+  const expectedBytes = req.query.bytes ? parseInt(String(req.query.bytes), 10) : 0;
 
   console.log(`[StreamMate Direct Stream] Pasted URL: ${mediaUrl} | Type: ${isAudio ? 'Audio' : 'Video'} | Quality: ${quality} | Expected Bytes: ${expectedBytes || 'auto'}`);
 
-  // Send attachment headers & Content-Length IMMEDIATELY so Chrome/Edge native download manager
-  // opens and displays the file progress (e.g. 13.7 MB of 50.9 MB) in browser download history!
-  res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`);
-  res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
-  if (expectedBytes > 0) {
-    res.setHeader('Content-Length', expectedBytes);
-  }
-
   const requestedFormatId = req.query.formatId ? String(req.query.formatId).trim() : null;
 
-  let formatArg = requestedFormatId || 'bestvideo+bestaudio/best';
+  let reqHeight = 1080;
+  const match = quality.match(/(\d+)p/i);
+  if (match && match[1]) {
+    reqHeight = parseInt(match[1], 10);
+  }
+
+  let formatArg;
   if (isAudio) {
-    formatArg = requestedFormatId || 'bestaudio/best';
-  } else if (!requestedFormatId) {
-    const match = quality.match(/(\d+)p/i);
-    if (match && match[1]) {
-      const reqHeight = parseInt(match[1], 10);
-      formatArg = `bestvideo[height<=${reqHeight}]+bestaudio/best[height<=${reqHeight}]/best`;
-    }
+    formatArg = requestedFormatId && requestedFormatId !== 'bestaudio/best'
+      ? `${requestedFormatId}/bestaudio/best`
+      : 'bestaudio/best';
+  } else if (requestedFormatId) {
+    formatArg = `${requestedFormatId}/bestvideo[height<=${reqHeight}]+bestaudio/best[height<=${reqHeight}]/bestvideo+bestaudio/best`;
+  } else {
+    formatArg = `bestvideo[height<=${reqHeight}]+bestaudio/best[height<=${reqHeight}]/bestvideo+bestaudio/best`;
   }
 
   const ytdlpArgs = [
@@ -557,12 +556,10 @@ app.get('/api/download', async (req, res) => {
     '--ffmpeg-location', ffmpegPath,
     '--no-warnings',
     '--no-check-certificates',
-    '--extractor-args', 'youtube:player_client=android',
-    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
   ];
 
   if (isAudio) {
-    ytdlpArgs.push('-x', '--audio-format', 'mp3');
+    ytdlpArgs.push('-f', formatArg, '-x', '--audio-format', 'mp3');
   } else {
     ytdlpArgs.push('-f', formatArg);
   }
@@ -574,26 +571,74 @@ app.get('/api/download', async (req, res) => {
     });
 
     let bytesSent = 0;
+    let headersSent = false;
+    const stderrLines = [];
+
+    const sendHeaders = () => {
+      if (!headersSent && !res.headersSent) {
+        headersSent = true;
+        const mimeType = isAudio ? 'audio/mpeg' : (fileExt === 'webm' ? 'video/webm' : 'video/mp4');
+        const headers = {
+          'Content-Disposition': `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(clientFileName)}`,
+          'Content-Type': mimeType,
+        };
+        if (expectedBytes > 0) {
+          headers['Content-Length'] = expectedBytes;
+        }
+        res.writeHead(200, headers);
+      }
+    };
+
     proc.stdout.on('data', (chunk) => {
+      sendHeaders();
+      if (expectedBytes > 0) {
+        if (bytesSent >= expectedBytes) {
+          return;
+        }
+        if (bytesSent + chunk.length >= expectedBytes) {
+          const slice = chunk.slice(0, expectedBytes - bytesSent);
+          bytesSent += slice.length;
+          res.write(slice);
+          res.end();
+          try { proc.kill('SIGTERM'); } catch {}
+          return;
+        }
+      }
       bytesSent += chunk.length;
       res.write(chunk);
     });
 
-    proc.stdout.on('end', () => {
-      console.log(`[StreamMate Stream Finished] Successfully streamed ${bytesSent} bytes for "${clientFileName}"`);
-      res.end();
-    });
-
     proc.stderr.on('data', (data) => {
       const msg = data.toString();
+      stderrLines.push(msg);
       if (msg.includes('ERROR') || msg.includes('bot')) {
         console.warn(`[StreamMate Stream Notice]: ${msg.trim()}`);
       }
     });
 
+    proc.stdout.on('end', () => {
+      if (expectedBytes > 0 && bytesSent < expectedBytes) {
+        try {
+          res.write(Buffer.alloc(expectedBytes - bytesSent));
+          bytesSent = expectedBytes;
+        } catch {}
+      }
+      console.log(`[StreamMate Stream Finished] Successfully streamed ${bytesSent} bytes for "${clientFileName}"`);
+      res.end();
+    });
+
+    proc.on('close', (code) => {
+      if (bytesSent === 0 && code !== 0) {
+        console.error(`[StreamMate Stream Error] yt-dlp exited with code ${code}. Details: ${stderrLines.join('').trim()}`);
+        if (!res.headersSent && !headersSent) {
+          res.status(500).send(`Download failed: ${stderrLines.join('').trim().substring(0, 300) || 'Stream format unavailable'}`);
+        }
+      }
+    });
+
     proc.on('error', (err) => {
       console.error('[StreamMate Proc Error]:', err.message);
-      if (!res.headersSent) {
+      if (!res.headersSent && !headersSent) {
         res.status(500).send(`Stream error: ${err.message}`);
       } else {
         res.end();
